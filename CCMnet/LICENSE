@@ -1,0 +1,8 @@
+--------------------------------------------------
+Source code incorporated from package 'ergm'
+--------------------------------------------------
+
+Several functions have been copied with modification from the R package 'ergm', under the terms of GPL version 3 + file LICENSE. They are identified in the source code, along with copyright attribution.  This attribution appears when the package is loaded.
+
+If you are modifying/adopting 'CCMnet', please ensure any code attributed to the 'ergm' package has followed the proper copyright and attribution requirements.    See http://statnet.csde.washington.edu/attribution.shtml for additional information on license and attribution for 'ergm' code.
+

@@ -1,0 +1,12 @@
+citHeader("To cite package CCMnet in publications use:")
+
+citEntry(entry="Article",
+         title = "Sampling Networks from Their Posterior Predictive Distribution",
+         author = personList(as.person("Ravi Goyal, Joseph Blitzstein, Victor De Gruttola")),
+	 journal = "Network Science",
+         year = "In press",
+         textVersion = "Ravi Goyal, Joseph Blitzstein, Victor De Gruttola.  Sampling Networks from Their Posterior Predictive Distribution, Network Science, In press")
+
+      
+          
+

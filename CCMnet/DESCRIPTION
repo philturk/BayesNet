@@ -1,0 +1,13 @@
+Package: CCMnet
+Version: 0.0-4
+Date: 2016-05-09
+Title: Simulate Congruence Class Model for Networks
+Author: Ravi Goyal, with contributions from Mark S. Handcock (ergm R package), David R. Hunter (ergm R package), Carter T. Butts (ergm R package), Steven M. Goodreau (ergm R package), Pavel N. Krivitsky (ergm R package), Martina Morris (ergm R package), Nicole Bohme Carnegie (ergm-user term degmix)
+Maintainer: Ravi Goyal <RGoyal@mathematica-mpr.com>
+Depends: sna, network, ergm, R(>= 2.12.2)
+Description: Tools to simulate networks based on Congruence Class models.
+License: GPL-3 + file LICENSE
+Packaged: 2016-09-28 14:25:48 UTC; rgoyal
+NeedsCompilation: yes
+Repository: CRAN
+Date/Publication: 2015-12-10 09:49:11
