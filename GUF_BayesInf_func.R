@@ -70,11 +70,14 @@ BI_posterior_prior <- function(g, Network_stats, Prob_Distr_Params) {
 
 	#Likelihood is normal should be multinominal (close so not a big deal)
 
-		mean_dmm_orig = g_dmm
+		mean_dmm_orig = deg_mixing_matrix_uni(g_orig, max(degree(g_orig)/2)) ###1/3/17
 
 		mean_dmm_orig = cbind(mean_dmm_orig, matrix(0, nrow = dim(mean_dmm_orig)[1], ncol = dim(mean_dmm)[2] - dim(mean_dmm_orig)[2]))
 		mean_dmm_orig = rbind(mean_dmm_orig, matrix(0, nrow = dim(mean_dmm)[1] - dim(mean_dmm_orig)[1], ncol = dim(mean_dmm_orig)[2]))
-		mean_dmm_orig = (mean_dmm_orig + .2)/ sum(mean_dmm_orig[upper.tri(mean_dmm_orig, diag = TRUE)] + .2) #####THE +0.2 is to prevent singular matrices for variance
+		
+		rand_mean_dmm_orig = runif(n = length(c(mean_dmm_orig)), min = 0, max = 1)  #1/22/17 
+		mean_dmm_orig = mean_dmm_orig + rand_mean_dmm_orig  #1/22/17 
+		mean_dmm_orig = (mean_dmm_orig)/ sum(mean_dmm_orig[upper.tri(mean_dmm_orig, diag = TRUE)]) #1/22/17 #####THE +0.1 is to prevent singular matrices for variance
 
 		mean_dmm_orig_vector = mean_dmm_orig[upper.tri(mean_dmm_orig, diag = TRUE)]
 		var_dmm_orig = var_deg_dist_compute(mean_dmm_orig_vector)
@@ -107,8 +110,10 @@ BI_posterior_prior <- function(g, Network_stats, Prob_Distr_Params) {
 
 #print(c("MEAN: ", mean_dmm))
 #print(c("VAR : ", diag(var_dmm)))
-
-		return(list(list(mean_dmm, var_dmm)))
+    
+		mean_dmm_vector = mean_dmm_vector * network.edgecount(g_orig)  ###1/3/17
+		var_dmm = var_dmm * (network.edgecount(g_orig)^2)  ###1/3/17
+		return(list(list(mean_dmm_vector, var_dmm)))  ###1/3/17
 
 	}
 

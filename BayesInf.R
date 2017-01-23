@@ -1,14 +1,19 @@
 
 #install.packages("C:/Users/rgoyal/Desktop/Network Research/CCMnet_0.0-4.tar.gz", repos = NULL, type = "source")
 
+library('igraph')   ###1/3/17
 library('CCMnet')
+library('intergraph')  ###1/3/17
 
-setwd('C:\\Users\\rgoyal\\Desktop\\Network Research\\network inference')
+setwd('C:\\Users\\rgoyal\\Desktop\\Network Research\\network inference\\BayesNet-master')
 
 source("Generate_Network_Data.R")
 source("BayesInf_func_C_3.R")
 source("Sample_Network_Data_func.R")
 source("GUF_BayesInf_func.R")
+
+source("deg_mixing_matrix_uni.R")  ###1/3/17
+
 
 library('mvtnorm')
 library('e1071')
@@ -73,9 +78,9 @@ if (network.edgecount(P) > 5) {
 
 #####Calculate Mean and Variance of Graph properties#######
 
-sample_deg_dist = TRUE #TRUE #
+sample_deg_dist = FALSE #TRUE #
 sample_density = FALSE #FALSE #
-sample_dmm = FALSE #TRUE #FALSE #
+sample_dmm = TRUE #FALSE #
 num_samples = 100
 
 strong_prior = TRUE
@@ -115,9 +120,14 @@ if (sample_dmm) {
   eta[[6]] = var_deg_dist_compute(eta[[5]][upper.tri(eta[[5]], diag = TRUE)])
   
   if (strong_prior == TRUE) {
-    eta[[5]] = deg_mixing_matrix_uni(G, max(degree(G)/2)) + .25
-    eta[[5]] = eta[[5]] / ecount(G)
-    eta[[6]] = var_deg_dist_compute(eta[[5]][upper.tri(eta[[5]], diag = TRUE)]) / num_samples
+    eta[[5]] = deg_mixing_matrix_uni(G, max(degree(G)/2)) ###1/3/17
+    
+    rand_eta = runif(n = length(c(eta[[5]])), min = 0, max = 1)
+    eta[[5]] = eta[[5]] + rand_eta  ###1/22/17
+    eta[[5]] = eta[[5]] / sum(eta[[5]][upper.tri(eta[[5]], diag = TRUE)]) #network.edgecount(G)  ###1/22/17
+    
+    eta[[6]] = var_deg_dist_compute(eta[[5]][upper.tri(eta[[5]], diag = TRUE)]) / num_samples ###1/22/17
+    
   }
   Prob_Distr_Params = list(list(eta[[5]], eta[[6]]))
   Network_stats = 'DegMixing'
@@ -133,16 +143,22 @@ if (sample_dmm) {
 ######BEGIN Bayesian Inference##################
 
 valid_graph_start = FALSE
-
+G_full = asNetwork(graph.full(network.size(G))) ###1/3/17
+counter = 1  ###1/3/17
 while(valid_graph_start == FALSE) {
-  G_start = G.generate(g_type = 2, population = population, bool_ER = bool_ER, bool_Assort = FALSE, 
-                       bool_Clustering = FALSE, ER_prob = ER_prob, Assort_val = Assort_val, Cluster_val = Cluster_val) 
+  G_start = G.generate(g_type = 2, population = population, bool_ER = TRUE, bool_Assort = FALSE, 
+                       bool_Clustering = FALSE, ER_prob = ER_prob, Assort_val = Assort_val, Cluster_val = Cluster_val) ###1/3/17
+  P_start = Update_P(G_full,Ia,Il,R,beta_a,beta_l,gamma_a,gamma_l, T_dist) ###1/3/17
+  G_start = asNetwork(union(asIgraph(G_start), as.undirected(asIgraph(P_start), mode = "collapse"))) ###1/3/17
   if (max(degree(G_start)/2) <= max(degree(G)/2)) {
     valid_graph_start = TRUE
-  }
+  } else { ###1/3/17
+    print(paste("Failed Trial: ", counter)) ###1/3/17
+    counter = counter + 1 ###1/3/17
+    ER_prob = ER_prob / 2  ###1/3/17
+  } ###1/3/17
 }
 
-P_start = Update_P(G_start,Ia,Il,R,beta_a,beta_l,gamma_a,gamma_l, T_dist)
 
 Init_G = G
 Init_P = P
