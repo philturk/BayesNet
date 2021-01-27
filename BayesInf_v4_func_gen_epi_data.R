@@ -17,20 +17,25 @@ generate_epidemic_data <- function(beta_a = 1/5,
   max_try = 5
   
   while(invalid_epidemic & counter < max_try) {
-    
-    CCMnet_Result = CCMnet_constr(Network_stats=Network_stats,
+
+    CCMnet_Result = CCMnetpy::CCMnet_constr(Network_stats=Network_stats,
                                   Prob_Distr=Prob_Distr,
                                   Prob_Distr_Params=Prob_Distr_Params, 
-                                  samplesize = 2,
-                                  burnin=1000000, 
-                                  interval=1000,
+                                  samplesize = as.integer(1),
+                                  burnin=as.integer(10000), 
+                                  interval=as.integer(10),
                                   statsonly=TRUE, 
                                   P=NULL,
-                                  population=population, 
-                                  covPattern = covPattern,
-                                  remove_var_last_entry = FALSE) 
+                                  population=as.integer(population), 
+                                  covPattern = as.integer(covPattern),
+                                  bayesian_inference = FALSE,
+                                  Ia = NULL, 
+                                  Il = NULL, 
+                                  R = NULL, 
+                                  epi_params = NULL,
+                                  print_calculations = FALSE) 
     
-    G = CCMnet_Result[[2]][[1]]
+    G = CCMnet_Result[[1]]
     
     Initial_Data = Initialize_G_P_Ia_Il_R(population, beta_a, beta_l, gamma_a, gamma_l, G = G, num_init_infected = num_init_infected) 
     

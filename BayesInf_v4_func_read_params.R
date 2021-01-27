@@ -3,7 +3,7 @@ init_seed = runif(1,1,1000)
 
 #Population parameters
 population = 500
-covPattern = c(rep(1,population/2), rep(2,population/2)) #only use for Mixing
+covPattern = c(rep(0,population/2), rep(1,population/2)) #only use for Mixing
 
 #Epidemic parameters
 num_init_infected = 1
@@ -13,11 +13,11 @@ gamma_a = 1/10
 gamma_l = 1/100
 
 #Network model parameters
-Network_stats = 'Mixing' #'Density' #Only two options available
-Prob_Distr_Params = NULL
-Prob_Distr_Params[[1]][[1]] = c(10,10,10) #Number or edges in mixing matrix [1,1], [1,2], and [2,2]
-Prob_Distr_Params[[1]][[2]] = matrix(c(2,0,0,0,2,0,0,0,2), nrow = 3, ncol = 3)
-Prob_Distr = 'Normal' #'DirMult'
+Network_stats = list(c("Mixing"))
+Prob_Distr = list(c("Multinomial_Poisson"))
+Prob_Distr_Params = vector("list", 2)
+Prob_Distr_Params[[1]] = c(1000) #Number or edges in mixing matrix [1,1], [1,2], and [2,2]
+Prob_Distr_Params[[2]] = c(0.3, 0.4, 0.3) 
 
 #Prior parameters
 strong_prior = TRUE

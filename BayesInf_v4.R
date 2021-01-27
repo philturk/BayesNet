@@ -1,6 +1,9 @@
 
 #install.packages("C:/Users/rgoyal/Desktop/Network Research/CCMnet_0.0-4.tar.gz", repos = NULL, type = "source")
 
+library(CCMnetpy)
+CCMnet_python_setup()
+
 library('igraph')   
 library('CCMnet')
 library('intergraph')  
@@ -8,12 +11,12 @@ library('intergraph')
 library('mvtnorm')
 library('e1071')
 
-source('C:/Users/ravij/OneDrive/Desktop/Network Research/network inference/NetBayes_Simulation/BayesInf_v4_func_read_params.R')
-source('C:/Users/ravij/OneDrive/Desktop/Network Research/network inference/NetBayes_Simulation/BayesInf_v4_func_gen_epi_data.R')
-source('C:/Users/ravij/OneDrive/Desktop/Network Research/network inference/NetBayes_Simulation/BayesInf_v4_func_gen_genetic_data.R')
-source('C:/Users/ravij/OneDrive/Desktop/Network Research/network inference/NetBayes_Simulation/BayesInf_v4_func_initial_bayes_inf.R')
-source('C:/Users/ravij/OneDrive/Desktop/Network Research/network inference/NetBayes_Simulation/BayesInf_v4_func_bayes_inf.R')
-source('C:/Users/ravij/OneDrive/Desktop/Network Research/network inference/NetBayes_Simulation/BayesInf_v4_func_diagnostics.R')
+source('BayesInf_v4_func_read_params.R')
+source('BayesInf_v4_func_gen_epi_data.R')
+source('BayesInf_v4_func_gen_genetic_data.R')
+source('BayesInf_v4_func_initial_bayes_inf.R')
+source('BayesInf_v4_func_bayes_inf.R')
+source('BayesInf_v4_func_diagnostics.R')
 
 set.seed(init_seed)
 
