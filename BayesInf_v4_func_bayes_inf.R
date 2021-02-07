@@ -1,66 +1,38 @@
-Update_G <- function(G,P,Ia,Il,R,beta_a,beta_l, Prob_Distr_Params, Network_stats, Prob_Distr) {
-  
-  BI_Prob_Distr_Params = BI_posterior_prior(g = G,
-                                            Network_stats = Network_stats,
-                                            Prob_Distr_Params = Prob_Distr_Params) 
-  
-  #   Network_stats=Network_stats
-  #   Prob_Distr='Normal'
-  #   Prob_Distr_Params=BI_Prob_Distr_Params 
-  #   samplesize = 2
-  #   burnin=100 
-  #   interval=2
-  #   statsonly=TRUE
-  #   TranNet = P
-  #   P=G
-  #   population=network.size(G) 
-  #   covPattern = NULL
-  #   remove_var_last_entry = FALSE
-  #   print_info = 0
-  #   BayesInference = 1
-  #   Ia = Ia
-  #   Il = Il
-  #   R_times = R
-  #   beta_a = beta_a
-  #   beta_l = beta_l
-  
-  covPattern = NULL
-  
-  if (Network_stats == 'Density') {
-    BayesInference = c(1,network.edgecount(P))
-  } else if (Network_stats == 'Mixing') {
-    cov_counts = tabulate(get.node.attr(G, "CovAttribute"))
-    BayesInference = c(1,c(summary(G~nodemix('CovAttribute'))))
-    covPattern = get.node.attr(G, "CovAttribute")
-  } else {
-    BayesInference = c(0,0)
-  }
+Update_G <- function(G,P,Ia,Il,R,beta_a,beta_l, Prob_Distr_Params, Network_stats, Prob_Distr, covPattern) {
   
   Ia[which(Ia == Inf)] = 999999+1
   Il[which(Il == Inf)] = 999999+1
   R[which(R == Inf)] = 999999+1
   
-  CCMnet_Result = CCMnet_constr(Network_stats=Network_stats,
-                                Prob_Distr=Prob_Distr,
-                                Prob_Distr_Params=BI_Prob_Distr_Params, 
-                                samplesize = 2,
-                                burnin=500000, 
-                                interval=2,
-                                statsonly=TRUE, 
-                                P=G,
-                                population=network.size(G), 
-                                covPattern = covPattern,
-                                remove_var_last_entry = FALSE,
-                                print_info = 0,
-                                BayesInference = BayesInference,
-                                TranNet = P,
-                                Ia = Ia,
-                                Il = Il,
-                                R_times = R,
-                                beta_a = beta_a,
-                                beta_l = beta_l) 
+  G_df = igraph::as_data_frame(G)
+  G_df[,1] =  as.integer(G_df[,1])
+  G_df[,2] =  as.integer(G_df[,2])
   
-  return(CCMnet_Result[[2]][[1]])
+  P_df = igraph::as_data_frame(P)
+  P_df[,1] =  as.integer(P_df[,1]) - 1
+  P_df[,2] =  as.integer(P_df[,2]) - 1
+  
+  epi_params = c(beta_a, beta_l)
+  
+  CCMnet_Result = CCMnetpy::CCMnet_constr(Network_stats=Network_stats,
+                                          Prob_Distr=Prob_Distr,
+                                          Prob_Distr_Params=Prob_Distr_Params, 
+                                          samplesize = as.integer(1),
+                                          burnin=as.integer(10000), 
+                                          interval=as.integer(10),
+                                          statsonly=TRUE,
+                                          G=G_df,
+                                          P=P_df,
+                                          population=as.integer(population), 
+                                          covPattern = as.integer(covPattern),
+                                          bayesian_inference = TRUE,
+                                          Ia = Ia, 
+                                          Il = Il, 
+                                          R = R, 
+                                          epi_params = epi_params,
+                                          print_calculations = FALSE) 
+  
+  return(list(CCMnet_Result[[1]], CCMnet_Result[[2]]))
 }
 
 
@@ -69,10 +41,9 @@ Update_P <- function(G,Ia,Il,R,beta_a,beta_l,gamma_a,gamma_l, T) {
   infected = which(R < Inf)
   infected = sample(infected, length(infected), replace = FALSE)	
   
-  new_P = network.initialize(network.size(G), directed = TRUE)
-  
+  new_P = igraph::graph.empty(n = igraph::vcount(G), directed = TRUE)
   for (j in infected) {
-    poss_parent_j = get.neighborhood(G, j, type = "combined")
+    poss_parent_j = igraph::neighbors(G, j)
     Ia_j = Ia[j]
     Il_j = Il[j]
     poss_parent_j = poss_parent_j[intersect(which(Ia[poss_parent_j] < Ia_j), which(R[poss_parent_j] > Ia_j))]
@@ -89,7 +60,7 @@ Update_P <- function(G,Ia,Il,R,beta_a,beta_l,gamma_a,gamma_l, T) {
       parent_j_id = sample(c(1:length(poss_parent_j)),1,prob=wts)
       parent_j = poss_parent_j[parent_j_id]
       
-      new_P = add.edge(new_P, tail = parent_j, head=j)
+      new_P = igraph::add.edges(new_P, edges = c(as.numeric(parent_j), j))
       
     } else {
       #orphan - or initial infected
@@ -243,76 +214,29 @@ Update_I <- function(G,P,Ia,Il,R,beta_a,beta_l,gamma_a,gamma_l) {
 
 
 
-BI_posterior_prior <- function(g, Network_stats, Prob_Distr_Params) {
-  
-  g_orig = g
-  
-  if  (Network_stats == 'Density') {
-    
-    mean_density = Prob_Distr_Params[[1]][[1]]
-    var_density = Prob_Distr_Params[[1]][[2]]
-    
-    g_density_orig =  network.edgecount(g_orig) / choose(network.size(g_orig),2)
-    var_density_orig = (g_density_orig * (1-g_density_orig))
-    
-    mean_density_1 = ((mean_density/var_density) + (network.edgecount(g_orig)/var_density_orig))
-    mean_density_2 = ((1/var_density) + (choose(network.size(g_orig),2)/var_density_orig))
-    mean_density = mean_density_1 / mean_density_2
-    
-    var_density = 1/mean_density_2
-    
-    return(list(list(mean_density, var_density)))
-  }
+Update_Prob_Distr_Params <- function(g, Prob_Distr_Params_hyperprior, Network_stats, Prob_Distr, Prob_Distr_Params, G_stats) {
   
   if  (Network_stats == 'Mixing') {
-    
-    num_cov_type = tabulate(get.node.attr(g, "CovAttribute"))
-    
-    mean_mixing = Prob_Distr_Params[[1]][[1]]
-    var_mixing = diag(Prob_Distr_Params[[1]][[2]])
-    
-    mean_mixing_orig = summary(g_orig~nodemix('CovAttribute'))/c(num_cov_type[1], num_cov_type[1], num_cov_type[2])
-    p1 = mean_mixing_orig[1]/(num_cov_type[1]-1)
-    var_p1 = p1*(1-p1)
-    
-    p2 = mean_mixing_orig[2]/(num_cov_type[1]-1)
-    var_p2 = p2*(1-p2)
-    
-    p3 = mean_mixing_orig[3]/(num_cov_type[2]-1)
-    var_p3 = p3*(1-p3)
-    
-    var_mixing_orig = c((num_cov_type[1]-1) * var_p1,
-                        (num_cov_type[1]-1) * var_p2,
-                        (num_cov_type[2]-1) * var_p3)
-    x_count = summary(g_orig~nodemix('CovAttribute'))
-    
-    mean_mixing_v = c()
-    var_mixing_v = c()
-    index_j = c(1,1,2)
-    for (j in c(1:3)) {
-      
-      mean_density_1 = ((mean_mixing[j]/var_mixing[j]) + (x_count[j]/var_mixing_orig[j]))
-      mean_density_2 = ((1/var_mixing[j]) + (num_cov_type[index_j[j]]/var_mixing_orig[j]))
-      mean_mixing_v[j] = mean_density_1 / mean_density_2
-      
-      var_mixing_v[j] = 1/mean_density_2
+    if (Prob_Distr[[1]][1] == 'Multinomial_Poisson') {
+      if (Prob_Distr_Params_hyperprior[[1]][1] == 'Dirichlet_Gamma') {
+        gamma_kappa = Prob_Distr_Params_hyperprior[[2]][1]
+        gamma_theta = Prob_Distr_Params_hyperprior[[2]][2]
+        
+        alpha = Prob_Distr_Params_hyperprior[[3]]
+        
+        g_edgecount = igraph::gsize(g)
+        
+        gamma_kappa_update = gamma_kappa + g_edgecount
+        gamma_theta_update =  gamma_theta/(1*gamma_theta + 1)
+        
+        alpha_update = alpha + G_stats
+
+        Prob_Distr_Params[[1]][1] = rgamma(1, shape = gamma_kappa_update, scale = gamma_theta_update)
+        Prob_Distr_Params[[2]] = as.numeric(gtools::rdirichlet(n = 1, alpha = alpha_update))
+      }
     }
-    
-    var_mixing_mat = matrix(c(var_mixing_v[1],0,0,
-                              0,var_mixing_v[2],0,
-                              0,0,var_mixing_v[3]), nrow = 3, ncol = 3) #Variance
-    
-    return(list(list(mean_mixing_v, var_mixing_mat)))
   }
-  
-  if (Network_stats == 'DegreeDist') {
-    
-    mean_deg_dist = Prob_Distr_Params[[1]][[1]] + tabulate(degree(g_orig)/2 + 1, nbins = length(Prob_Distr_Params[[1]][[1]])) 
-    return(list(list(mean_deg_dist)))
-    
-  }
-  
-  
+  return(Prob_Distr_Params)
 }
 
 

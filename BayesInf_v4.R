@@ -5,8 +5,8 @@ library(CCMnetpy)
 CCMnet_python_setup()
 
 library('igraph')   
-library('CCMnet')
-library('intergraph')  
+#library('CCMnet')
+#library('intergraph')  
 
 library('mvtnorm')
 library('e1071')
@@ -46,9 +46,9 @@ R = Initial_Data[[5]]
 #Genetic data
 T_dist = Initial_Data[[6]]
 
-#Sexual behavior data
-Prob_Distr_Params = Initial_Data[[7]]
-Prob_Distr = Initial_Data[[8]]
+#Hyperpriors for sexual behavior data
+Prob_Distr_Params_hyperprior = Initial_Data[[7]]
+Prob_Distr_Params = Initial_Data[[8]]
 
 ######BEGIN Bayesian Inference##################
 
@@ -67,12 +67,16 @@ ecount_P = c()
 
 for (mcmc_counter in c(1:n_mcmc_trials)) {
   
-  G = Update_G(G,P,Ia,Il,R,beta_a,beta_l,Prob_Distr_Params=Prob_Distr_Params, Network_stats = Network_stats, Prob_Distr = Prob_Distr)
+  G_info = Update_G(G,P,Ia,Il,R,beta_a,beta_l,Prob_Distr_Params=Prob_Distr_Params, Network_stats = Network_stats, Prob_Distr = Prob_Distr, covPattern = covPattern)
+  G = G_info[[1]]
+  G_stats = as.numeric(G_info[[2]])
   
   P = Update_P(G,Ia,Il,R,beta_a,beta_l,gamma_a,gamma_l, T_dist)
 
-  ecount_G = c(ecount_G, network.edgecount(G))
-  ecount_P = c(ecount_P, network.edgecount(P))
+  Prob_Distr_Params = Update_Prob_Distr_Params(G,Prob_Distr_Params_hyperprior=Prob_Distr_Params_hyperprior, Network_stats = Network_stats, Prob_Distr = Prob_Distr, Prob_Distr_Params = Prob_Distr_Params, G_stats = G_stats)
+  
+  ecount_G = c(ecount_G, igraph::ecount(G))
+  ecount_P = c(ecount_P, igraph::ecount(P))
   
   P_a[[mcmc_counter]] = P
   G_a[[mcmc_counter]] = G
@@ -82,5 +86,5 @@ for (mcmc_counter in c(1:n_mcmc_trials)) {
 }
 
 plot(ecount_G)
-abline(h=network.edgecount(G_truth), col = 'red')
+abline(h=igraph::ecount(G_truth), col = 'red')
 abline(h=mean(ecount_G), col = 'blue')

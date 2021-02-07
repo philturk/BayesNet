@@ -3,16 +3,17 @@ Inital_bayes_inf <- function(population,Network_stats, Prob_Distr, Prob_Distr_Pa
                              covPattern,
                              Ia,Il,R,beta_a,beta_l,gamma_a,gamma_l, T_dist) {
   
-  G_full = asNetwork(graph.full(population)) 
+  G_full = graph.full(population) 
   P_start = Update_P(G_full,Ia,Il,R,beta_a,beta_l,gamma_a,gamma_l, T_dist)
   
   CCMnet_Result = CCMnetpy::CCMnet_constr(Network_stats=Network_stats,
                                             Prob_Distr=Prob_Distr,
                                             Prob_Distr_Params=Prob_Distr_Params, 
                                             samplesize = as.integer(1),
-                                            burnin=as.integer(10000), 
+                                            burnin=as.integer(100000), 
                                             interval=as.integer(10),
-                                            statsonly=TRUE, 
+                                            statsonly=TRUE,
+                                            G=NULL,
                                             P=NULL,
                                             population=as.integer(population), 
                                             covPattern = as.integer(covPattern),
@@ -25,10 +26,9 @@ Inital_bayes_inf <- function(population,Network_stats, Prob_Distr, Prob_Distr_Pa
   
   G_start2 = CCMnet_Result[[1]]
   
-  U_graph = igraph::union(asIgraph(G_start2), as.undirected(asIgraph(P_start), mode = "collapse"))
-  edgelist_Ugraph = ends(U_graph, es = c(1:ecount(U_graph)))
-  G_start<-network.edgelist(edgelist_Ugraph,network.initialize(population, directed = FALSE),ignore.eval=FALSE)
-  set.vertex.attribute(G_start, "CovAttribute", value = covPattern)
-  
+  U_P_Start = as.undirected(P_start, mode = "collapse")
+  V(U_P_Start)$name <- as.character(c(0:(population-1)))
+  G_start = igraph::union(G_start2, U_P_Start)
+
   return(list(G_start, P_start))
 }

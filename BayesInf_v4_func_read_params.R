@@ -19,7 +19,13 @@ Prob_Distr_Params = vector("list", 2)
 Prob_Distr_Params[[1]] = c(1000) #Number or edges in mixing matrix [1,1], [1,2], and [2,2]
 Prob_Distr_Params[[2]] = c(0.3, 0.4, 0.3) 
 
-#Prior parameters
+#Hyper prior parameters
+Prob_Distr_Params_hyperprior = vector("list", 3)
+Prob_Distr_Params_hyperprior[[1]][1] = 'Dirichlet_Gamma'
+Prob_Distr_Params_hyperprior[[2]][1] = 1 #gamma k (shape)
+Prob_Distr_Params_hyperprior[[2]][2] = 1000 #gamma theta (scale)
+Prob_Distr_Params_hyperprior[[3]] = rep(1/length(Prob_Distr_Params[[2]]), length(Prob_Distr_Params[[2]])) #dirichlet alpha
+
 strong_prior = TRUE
 num_samples = 100
 
@@ -27,4 +33,4 @@ num_samples = 100
 genetic_bits = 1024
 
 #Bayes Inf MCMC
-n_mcmc_trials = 1500
+n_mcmc_trials = 5
