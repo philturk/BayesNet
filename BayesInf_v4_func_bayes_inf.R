@@ -9,8 +9,8 @@ Update_G <- function(G,P,Ia,Il,R,beta_a,beta_l, Prob_Distr_Params, Network_stats
   G_df[,2] =  as.integer(G_df[,2])
   
   P_df = igraph::as_data_frame(P)
-  P_df[,1] =  as.integer(P_df[,1]) - 1
-  P_df[,2] =  as.integer(P_df[,2]) - 1
+  P_df[,1] =  as.integer(P_df[,1])
+  P_df[,2] =  as.integer(P_df[,2])
   
   epi_params = c(beta_a, beta_l)
   
@@ -41,9 +41,11 @@ Update_P <- function(G,Ia,Il,R,beta_a,beta_l,gamma_a,gamma_l, T) {
   infected = which(R < Inf)
   infected = sample(infected, length(infected), replace = FALSE)	
   
-  new_P = igraph::graph.empty(n = igraph::vcount(G), directed = TRUE)
+  new_P = data.frame(from = NULL, to = NULL)
+  
   for (j in infected) {
-    poss_parent_j = igraph::neighbors(G, j)
+    poss_parent_j = igraph::neighbors(G, j) #takes vertex id, returns names = vertex_id - 1
+    poss_parent_j = as.numeric(V(G)[poss_parent_j])
     Ia_j = Ia[j]
     Il_j = Il[j]
     poss_parent_j = poss_parent_j[intersect(which(Ia[poss_parent_j] < Ia_j), which(R[poss_parent_j] > Ia_j))]
@@ -60,14 +62,18 @@ Update_P <- function(G,Ia,Il,R,beta_a,beta_l,gamma_a,gamma_l, T) {
       parent_j_id = sample(c(1:length(poss_parent_j)),1,prob=wts)
       parent_j = poss_parent_j[parent_j_id]
       
-      new_P = igraph::add.edges(new_P, edges = c(as.numeric(parent_j), j))
-      
+      new_P_edge = data.frame(from = parent_j-1, to = j-1)
+      new_P = rbind(new_P, new_P_edge)
     } else {
       #orphan - or initial infected
       #print(c("ERROR: ORPHAN - ", j))
     }	
   }
-  return(new_P)
+  
+  nodes_attr_df = data.frame(name = c(0:(population-1)))
+  P = graph_from_data_frame(new_P, directed=TRUE, vertices = nodes_attr_df)
+  
+  return(P)
 }
 
 Update_Ia <- function(G,P,Ia,Il,R,beta_a,beta_l,gamma_a,gamma_l) {

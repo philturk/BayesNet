@@ -147,12 +147,12 @@ SIIR.simulator <- function(g, population, beta_a, beta_l, gamma_a, gamma_l, num_
 Initialize_G_P_Ia_Il_R <- function(population, beta_a, beta_l, gamma_a, gamma_l, G = NULL, num_init_infected = 1) {
   
   exampleepidemic <- SIIR.simulator(G, population, beta_a, beta_l, gamma_a, gamma_l, num_init_infected)
-  
-  P = igraph::make_empty_graph(n = population, directed = TRUE)
-  
-  P_edges = c(rbind(exampleepidemic[-which(is.na(exampleepidemic[,2])),2], exampleepidemic[-which(is.na(exampleepidemic[,2])),1]))
-  P = igraph::add_edges(P, P_edges)
-  
+
+  nodes_attr_df = data.frame(name = c(0:(population-1)))
+  p_df = data.frame(from = exampleepidemic[-which(is.na(exampleepidemic[,2])),2]-1, 
+             to = exampleepidemic[-which(is.na(exampleepidemic[,2])),1]-1)
+  P = graph_from_data_frame(p_df, directed=TRUE, vertices = nodes_attr_df)
+
   Ia = array(Inf, dim = population)
   for (i in c(1:length(exampleepidemic[,3]))) {
     Ia[exampleepidemic[i,1]] = exampleepidemic[i,3] 

@@ -3,7 +3,8 @@ Inital_bayes_inf <- function(population,Network_stats, Prob_Distr, Prob_Distr_Pa
                              covPattern,
                              Ia,Il,R,beta_a,beta_l,gamma_a,gamma_l, T_dist) {
   
-  G_full = graph.full(population) 
+  G_full = graph.full(n = population, directed = FALSE)
+  G_full = G_full %>% set_vertex_attr("name", value = c(0:(population-1)))
   P_start = Update_P(G_full,Ia,Il,R,beta_a,beta_l,gamma_a,gamma_l, T_dist)
   
   CCMnet_Result = CCMnetpy::CCMnet_constr(Network_stats=Network_stats,
