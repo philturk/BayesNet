@@ -33,4 +33,4 @@ num_samples = 100
 genetic_bits = 1024
 
 #Bayes Inf MCMC
-n_mcmc_trials = 5
+n_mcmc_trials = 1000

@@ -67,10 +67,35 @@ generate_epidemic_data <- function(beta_a = 1/5,
         
         g_edgecount = igraph::gsize(G)
         
-        Prob_Distr_Params_hyperprior[[2]][1] = gamma_kappa + g_edgecount
-        Prob_Distr_Params_hyperprior[[2]][2] = gamma_theta/(1*gamma_theta + 1)
+        sampled_v = sample(igraph::V(G), num_samples, replace=FALSE)
         
-        Prob_Distr_Params_hyperprior[[3]] = alpha + as.numeric(CCMnet_Result[[2]])
+        sampled_v_deg =igraph::degree(G, sampled_v, mode = "all")
+        g_edgecount = sum(sampled_v_deg) * .5
+        
+        sampled_covMatrix = matrix(rep(0, length(unique(covPattern))^2), 
+                                   nrow = length(unique(covPattern)),
+                                   ncol = length(unique(covPattern)))
+        for (j in sampled_v) {
+          neighbors_j = igraph::neighbors(G, j) #takes vertex id, returns names = vertex_id - 1
+          neighbors_j = as.numeric(V(G)[neighbors_j])
+          cov_j = covPattern[as.numeric(V(G)[j])] +1
+          if (length(neighbors_j) > 0) {
+            for (i in neighbors_j) {
+              cov_i = covPattern[i] + 1
+              sampled_covMatrix[cov_i, cov_j] = sampled_covMatrix[cov_i, cov_j] + 1
+              if (cov_i != cov_j) {
+                sampled_covMatrix[cov_j, cov_i] = sampled_covMatrix[cov_j, cov_i] + 1
+              }
+            }
+          }
+        }
+        
+        g_mixingcount = sampled_covMatrix[upper.tri(sampled_covMatrix, diag = TRUE)]
+        
+        Prob_Distr_Params_hyperprior[[2]][1] = g_edgecount
+        Prob_Distr_Params_hyperprior[[2]][2] = population/num_samples
+        
+        Prob_Distr_Params_hyperprior[[3]] = alpha + g_mixingcount#as.numeric(CCMnet_Result[[2]])
         
       }
       Prob_Distr_Params[[1]][1] = rgamma(1, shape = Prob_Distr_Params_hyperprior[[2]][1], scale = Prob_Distr_Params_hyperprior[[2]][2])
@@ -80,10 +105,10 @@ generate_epidemic_data <- function(beta_a = 1/5,
     PG_Data = Genetic_Seq_Data(P=P, Ia=Ia,final_time = max(Ia[which(Ia < Inf)]), genetic_bits = genetic_bits)
     T_dist = hamming.distance(PG_Data[,-(genetic_bits+1)])
     
-    return(list(G, P, Ia, Il, R, T_dist, Prob_Distr_Params_hyperprior, Prob_Distr_Params))
+    return(list(G, P, Ia, Il, R, T_dist, Prob_Distr_Params_hyperprior, Prob_Distr_Params, CCMnet_Result[[2]]))
   } else {
     print("ERROR: FAILED")
-    return(list(NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL))
+    return(list(NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL))
   }
 }
 
