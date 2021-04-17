@@ -102,6 +102,24 @@ generate_epidemic_data <- function(beta_a = 1/5,
       Prob_Distr_Params[[2]] = as.numeric(gtools::rdirichlet(n = 1, alpha = Prob_Distr_Params_hyperprior[[3]]))
     }
     
+    if (Network_stats == 'Degree') { 
+      if (strong_prior == TRUE) {
+
+        alpha = Prob_Distr_Params_hyperprior[[3]]
+        sampled_v = sample(igraph::V(G), num_samples, replace=FALSE)
+        sampled_v_deg =igraph::degree(G, sampled_v, mode = "all")
+        g_deghist = (sampled_v_deg+1) %>% tabulate(nbins = population)
+
+        Prob_Distr_Params_hyperprior[[3]] = alpha + g_deghist
+        
+      }
+      Prob_Distr_Params[[1]][1] = 10
+      Prob_Distr_Params[[2]] = as.numeric(gtools::rdirichlet(n = 1, alpha = Prob_Distr_Params_hyperprior[[3]]))
+      min_val = min(Prob_Distr_Params[[2]][which(Prob_Distr_Params[[2]]>0)])
+      Prob_Distr_Params[[2]][which(Prob_Distr_Params[[2]]==0)] = min_val
+      Prob_Distr_Params[[2]] = Prob_Distr_Params[[2]]/sum(Prob_Distr_Params[[2]])
+    }
+    
     PG_Data = Genetic_Seq_Data(P=P, Ia=Ia,final_time = max(Ia[which(Ia < Inf)]), genetic_bits = genetic_bits)
     T_dist = hamming.distance(PG_Data[,-(genetic_bits+1)])
     
