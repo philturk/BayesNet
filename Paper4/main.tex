@@ -1,112 +1,154 @@
-\documentclass{article}
-
-\usepackage{arxiv}
-
-\usepackage[utf8]{inputenc} % allow utf-8 input
-\usepackage[T1]{fontenc}    % use 8-bit T1 fonts
-\usepackage{hyperref}       % hyperlinks
-\usepackage{url}            % simple URL typesetting
-\usepackage{booktabs}       % professional-quality tables
-\usepackage{amsfonts}       % blackboard math symbols
-\usepackage{nicefrac}       % compact symbols for 1/2, etc.
-\usepackage{microtype}      % microtypography
-\usepackage{lipsum}
-
-\usepackage{graphicx}% Include figure files
-\usepackage{dcolumn}% Align table columns on decimal point
-\usepackage{bm}% bold math
-
-\usepackage{amsmath}
-
-\usepackage{mathrsfs}
-\usepackage{tikz}
-\usepackage{amssymb}
-
-\usepackage{graphicx}
+\documentclass[11pt, notitlepage]{article}%
 
 \usepackage{natbib}
+\usepackage{color}
+\usepackage{amsmath}%
+\usepackage{amsthm}%
+\usepackage{amsfonts}%
+\usepackage{amssymb}%
+\usepackage{graphicx}
+\usepackage{lscape}
+\usepackage{multirow}
+\usepackage{setspace}
+\usepackage{authblk}
+\usepackage{mathrsfs}
+\usepackage{ulem}
+\usepackage{tikz}
+%------------------------------------------------------------
+\special{papersize=8.5in,11in}
+\addtolength{\oddsidemargin}{-1in}
+%\addtolength{\evensidemargin}{-.5in}
+\addtolength{\textwidth}{2in}
+\addtolength{\topmargin}{-1in}
+\addtolength{\textheight}{2in}
 
-\usepackage[algoruled,vlined]{algorithm2e}
+\newcommand{\E}{\text{E}}
+\newcommand{\Var}{\mbox{Var}}
+\newcommand{\Cov}{\mbox{Cov}}
+\newcommand{\Cor}{\mbox{Cor}}
+\newcommand{\notes}[1]{\textcolor{red}{#1}}
 
 \newcommand{\DDg}[4]{{#1}_{#2}^{#3}(#4)} 
 \newcommand{\DD}[3]{{#1}_{#2}^{#3}} 
 \newcommand{\BA}{Barab\'{a}si-Albert}
 
-\newcommand\MyBox[1]{%
-  \fbox{\parbox[c][1.7cm][c]{1.7cm}{\centering #1}}%
-}
-\newcommand\MyVBox[1]{%
-  \parbox[c][1.7cm][c]{1cm}{\centering\bfseries #1}%
-}  
-\newcommand\MyHBox[2][\dimexpr1.7cm+2\fboxsep\relax]{%
-  \parbox[c][1cm][c]{#1}{\centering\bfseries #2}%
-}  
-\newcommand\MyTBox[4]{%
-  \MyVBox{#1}\MyBox{#2}\hspace*{-\fboxrule}%
-  \MyBox{#3}\hspace*{-\fboxrule}%
-  \MyBox{#4}\par\vspace{-\fboxrule}
-}  
+\newcommand{\G}{\mathscr{G}}
+\newcommand{\Pnet}{\mathscr{P}}
 
-\title{Estimation of sexual contact network features by combining behavioral, clinical, and HIV genetic sequence data}
+%Theorem like environments
 
-\author{
-  %% examples of more authors
-  Name \\
-  Department\\
-  School\\
-  \texttt{emial} \\
-  \and
-  Name \\
-  Department\\
-  School\\
-  \texttt{emial} \\
-}
+\newtheorem{theorem}{Theorem}
+%\theoremstyle{plain}
+\newtheorem{proposition}{Proposition}
+\numberwithin{equation}{section}
+%--------------------------------------------------------
 
 \begin{document}
+
+\title{Estimation of contact network features by combining epidemic, behavioral and pathogen genetic sequence data}
+\author[1]{Nicole Bohme~Carnegie}
+\author[2]{Ravi~Goyal}
+
+\affil[1]{Department of Mathematical Sciences, Montana State University}
+\affil[2]{Mathematica Policy Research}
 \maketitle
 
 \begin{abstract}
 
 \end{abstract}
+\doublespacing
+\textbf{Key Words: Bayesian inference, phylodynamics, contact network, epidemic model, ...} 
 
-\keywords{Bayesian inference \and phylodynamics \and contact network \and epidemic model}
+\section{Terminology and notation}
 
-%------------------------------------------------------------------------
-%------------------------------------------------------------------------
+\subsection{Data sources}
 
-\section{Introduction}
+\subsection{Contact Network}
+ 
+\begin{table}
+\centering
+\doublespacing
+\begin{tabular}{ll}
+Symbol & Meaning \\ \hline
+$\mathcal{G}$ & Space of possible contact networks \\
+$G$ & Random variable representing a contact network \\
+$g$ & Realized contact network \\
+$\eta$ & Contact network features included in model \\
+$\mathcal{P}$ & Space of possible transmission networks \\
+$P$ & Random variable representing a transmission network \\
+$p$ & Realized transmission network \\
+$N$ & Population size \\
+$m$ & Number of nodes ultimately infected \\
+$\beta$ & Rate parameter for exponential distribution of time to transmission across an edge \\
+$k_w$ & Shape parameter for Gamma distribution of duration of Infectious phase, $w=I_1, I_2, I_3, I_4$ \\
+$\theta_w$ & Scale parameter for Gamma distribution of duration of Infectious phase, $w=I_1, I_2, I_3, I_4$ \\
+$\mathbf{T}$ & Matrix of times of treatment start and stop times \\
+$\mathbf{I}$ & Matrix of times of first transition to infectious phases \\
+$\mathbf{R}$ & Vector of removal times \\
+$\phi(G)$ & Mapping from $\mathcal{G}$ to values of $\eta$ \\
+$c_x = \phi^{-1}(x)$ & Congruence class of contact networks with characteristic value $x$\\
+$P_{\mathcal{X}}$ & Probability distribution on the space $\mathcal{X}$ \\
+$\pi_X$ & Prior distribution for parameter $X$ \\
+$D(j,k)$ & Pathogen genetic distance between nodes $j$ and $k$ \\
+$e_{jk}$ & Edge indicator for $(j, k)$ in $G$ ( = 1 if edge exists, 0 if not) \\
+$Par_k$ & Parent (infector) of infected node $k$ in the transmission network \\
+$\rho$ & Mixing rate \\
+\end{tabular}
+\caption{Summary of notation used throughout the paper. }
+\label{tab:notation}
+\end{table}
 
+\subsubsection{Epidemic model}
 
-%--------------------------------------------------------
-%------------------------------------------------------------------------
+We use a Susceptible-Infectious-Recovered (SIR) epidemic model with gamma-distributed waiting times in the E and I states and an exponential time to transmission over an S-I edge. This requires estimation or specification of twelve parameters:
+\begin{itemize}
+\item $\beta_i$: the exponential rate of transmission during each infectious phase
+\item $k_w, \theta_w$: the gamma shape and scale parameters that determine distribution of the length of each infectious phase
+\end{itemize}
 
-\section{Methods} \label{sec:method}
+\subsubsection{Transmission network}
 
-%------------------------------------------------------------------------
-%------------------------------------------------------------------------
+The transmission network $\Pnet$ is induced by epidemic spread over that network. 
 
+The transmission network is stochastically determined by the contact network and epidemic transition times. Each infected person (aside from the earliest infection) contributes one edge to the transmission network. First, the set of possible infectors for each person infected is determined. Potential infectors include all people who have entered the infectious phase and have not yet been removed at the time of infection of the infectee. The infector is then sampled from this set with probability proportional to the duration of time between when the potential infector became infectious and when the infection occurred. The edge between the selected infector and the infectee is then added to the transmission network.
 
-\section{Simulation Study}\label{sec:simulation}
+\section{Model and Methods}
+\label{sec:model}
 
+The likelihood $L(\mathbf{R}| \beta, \theta, k, D, \G, \Pnet, \eta, \mathbf{T}, \mathbf{I})$ can be factored into 6 components: the contribution of contacts over which infections were transmitted, the contribution of contacts over which infections were not transmitted, 
+the contribution of first transitions to each infectious phase, and the contribution of transitions from infectious phase to removal. These are:
 
-%------------------------------------------------------------------------
-%------------------------------------------------------------------------
+\begin{align}
+L_1 &= \prod_{(j,k) \in \mathscr{P}} \sum_{i=1}^{4} \beta_{i}\cdot \exp \{ -\beta_{i} \cdot \max (\min(I_{i+1}^{j}, I_{1}^{k})-I_{i}^{j},0) - \sum_{u=1}^{v} \max(\min(I_{1}^{k}, T_{i_{u,2}}^{j}) - T_{i_{u,1}} ,0) \}  \label{eq:l1} \\
+L_2 &= \prod_{(j,k) \in \mathscr{G} \setminus \mathscr{P}} \prod_{i=1}^{4} \exp\{-\beta_{i}\cdot\max(\min(I_{i+1}^{j}, I_{1}^{k})-I_{i}^{j},0) - \sum_{u=1}^{v} \max(\min(I_{1}^{k}, T_{i_{u,2}}^{j}) - T_{i_{u,1}}^{j} ,0) \}  \label{eq:l2}\\
+L_3 &= \frac{\prod_{l=1}^{m}{(I_{2}^{l}-I_{1}^{l})}^{I_{1}^{k}-1}\theta_I_{1}^{-m I_{1}^{k}}\cdot\exp\{{-\sum_{l=1}^{m}(I_{2}^{l}-I_{1}^{l})/\theta_{I_{1}}}\}}{\Gamma(I_{1}^{k})^m} \label{eq:l3} \\
+L_4 &= \frac{\prod_{l=1}^{m}{(I_{3}^{l}-I_{2}^{l})}^{I_{2}^{k}-1}\theta_I_{2}^{-m I_{2}^{k}}\cdot\exp\{{-\sum_{l=1}^{m}(I_{3}^{l}-I_{2}^{l})/\theta_{I_{2}}}\}}{\Gamma(I_{2}^{k})^m} \label{eq:l4} \\
+L_5 &= \frac{\prod_{l=1}^{m}{(I_{4}^{l}-I_{3}^{l})}^{I_{3}^{k}-1}\theta_I_{3}^{-m I_{3}^{k}}\cdot\exp\{{-\sum_{l=1}^{m}(I_{4}^{l}-I_{3}^{l})/\theta_{I_{3}}}\}}{\Gamma(I_{3}^{k})^m} \label{eq:l5} \\
+L_6 &= \frac{\prod_{l=1}^{m}{(R^{l}-I_{4}^{l})}^{I_{4}^{k}-1}\theta_I_{4}^{-m I_{4}^{k}}\cdot\exp\{{-\sum_{l=1}^{m}(R^{l}-I_{4}^{l})/\theta_{I_{4}}}\}}{\Gamma(I_{4}^{k})^m} \label{eq:l6}
+\end{align}
 
-\section{Application}
-\label{sec:application}
+where $m$ is the total number ultimately infected, and $\mathbf{T}$ is a $u \times 2$ matrix of start and stop times for treatment spells. Superscript indicates the node to which that times corresponds. For notational convenience, $I_{5}$ is equivalent to $R$. We assume for the purposes of this notation that the pair $(j,k)$ is ordered such that $j$ is infected first (or the only infected if it is an S-I edge).
 
-%------------------------------------------------------------------------
-%------------------------------------------------------------------------
+When a person $k$ is uninfected over the course of the epidemic, we take their transition times $(I^k, R^k)$ to be infinite. These combine to give us our likelihood of:
 
-\section{Discussion}
+\begin{equation} \label{eq:lprod}
+L = L_1 L_2 L_3 L_4 L_5 L_6
+\end{equation}
 
-%------------------------------------------------------------------------
-%------------------------------------------------------------------------
-\section*{Acknowledgments}
+\subsection{Inferential model}
 
-This work is supported by NIH grants R01AI51164 and ??.
-%------------------------------------------------------------------------
-%------------------------------------------------------------------------
+\subsubsection{Data and Priors}
+
+\subsection{Model fitting}
+
+\subsubsection{Update $\mathscr{G}$}
+
+\subsubsection{Update $\mathscr{P}$}
+
+\subsubsection{Update $\mathbf{E}$ and $\mathbf{I}$}
+
+\subsubsection{Update epidemic model parameters}
+
 \bibliographystyle{apalike}
 %\bibliography{phylodynamics_bib}
 \bibliography{networksBib}
