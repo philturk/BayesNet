@@ -40,7 +40,7 @@ genetic_seq_parent_node <- function(Genetic_Seq_a, last_updatetime, ctime, genet
 }
 
 genetic_seq_inf_node <- function(Genetic_Seq_a, last_updatetime, ctime, genetic_bits) {
-  nbit = 10
+  nbit = 0
   change_bits = array(0, dim = genetic_bits)
   change_bits[sample(c(1:genetic_bits), nbit, replace = FALSE)] = 1
   Genetic_Seq_a = (Genetic_Seq_a + change_bits) %% 2

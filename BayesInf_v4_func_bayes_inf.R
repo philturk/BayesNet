@@ -242,6 +242,25 @@ Update_Prob_Distr_Params <- function(g, Prob_Distr_Params_hyperprior, Network_st
       }
     }
   }
+  
+  if  (Network_stats == 'Degree') {
+    if (Prob_Distr[[1]][1] == 'Multinomial_Poisson') {
+      if (Prob_Distr_Params_hyperprior[[1]][1] == 'Dirichlet_Gamma') {
+
+        alpha = Prob_Distr_Params_hyperprior[[3]]
+        
+        v_deg =igraph::degree(g, mode = "all")
+        g_deghist = (v_deg) %>% tabulate(nbins = population)
+        
+        Prob_Distr_Params[[2]] = as.numeric(gtools::rdirichlet(n = 1, alpha = alpha + g_deghist))
+        min_val = min(Prob_Distr_Params[[2]][which(Prob_Distr_Params[[2]]>0)])
+        Prob_Distr_Params[[2]][which(Prob_Distr_Params[[2]]==0)] = min_val
+        Prob_Distr_Params[[2]] = Prob_Distr_Params[[2]]/sum(Prob_Distr_Params[[2]])
+
+      }
+    }
+  }
+  
   return(Prob_Distr_Params)
 }
 

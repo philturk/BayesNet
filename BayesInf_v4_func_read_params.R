@@ -7,10 +7,10 @@ covPattern = c(rep(0,population/2), rep(1,population/2)) #only use for Mixing
 
 #Epidemic parameters
 num_init_infected = 1
-beta_a = 1/5
-beta_l = 1/2.5
-gamma_a = 1/10
-gamma_l = 1/100
+beta_a = 0
+beta_l = 1
+gamma_a = 1/5
+gamma_l = 1/2
 
 #Network model parameters
 #Network_stats = list(c("Mixing"))
@@ -32,7 +32,7 @@ Prob_Distr_Params_hyperprior[[3]] = rep(1/population, population) #dirichlet alp
 
 
 strong_prior = TRUE
-num_samples = 100
+num_samples = 200
 
 #Genetic parameters
 genetic_bits = 1024
