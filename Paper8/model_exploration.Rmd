@@ -1,0 +1,264 @@
+---
+title: "visualize_sim_dist"
+author: "Gabrielle Lemire"
+date: "3/12/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Component Distribution for Simulated Genetic Networks
+
+```{r, warning=FALSE}
+library(ggplot2)
+library(rlist)
+library(reshape2)
+library(rstanarm)
+library(boot)
+
+sim_dist_100 = read.csv("sim_dists.csv")
+true_dist_1 = read.csv("true_dist.csv")
+samp_prop = seq(from = .95, to = 0.2, by = -0.05)
+# load extracted dataset
+```
+
+## 5 Mixed Model
+
+- Outstanding: do visuals for posterior checks (did a plot for one - interpret? seems quite bad haha)
+- based on residual exponential decay not fitting -- but the smoothness across sampling rate is promising
+- do expansion before trying to fit
+
+```{r}
+library(lme4)
+names(df_all_sim)[3] <- "nine_five"
+names(df_all_sim)[4] <- "nine"
+names(df_all_sim)[5] <- "eight_five"
+names(df_all_sim)[6] <- "eight"
+names(df_all_sim)[7] <- "seven_five"
+names(df_all_sim)[8] <- "seven"
+names(df_all_sim)[9] <- "six_five"
+names(df_all_sim)[10] <- "six"
+names(df_all_sim)[11] <- "five_five"
+names(df_all_sim)[12] <- "five"
+names(df_all_sim)[13] <- "four_five"
+names(df_all_sim)[14] <- "four"
+names(df_all_sim)[15] <- "three_five"
+names(df_all_sim)[16] <- "three"
+names(df_all_sim)[17] <- "two_five"
+names(df_all_sim)[18] <- "two"
+
+# compare for diff props
+# model_true = glmer(abs(jitter(as.character(0.95)))~X +(1|variable),family=poisson, data=df)
+# 95
+nine_five = glmer(nine_five~X +(1|variable),family=poisson, data=df_all_sim)
+summary(nine_five)
+ranef(nine_five) #all zeros
+# coef(nine_five)
+fixef(nine_five)
+plot(nine_five)
+
+# 90
+nine = glmer(nine~X +(1|variable),family=poisson, data=df_all_sim)
+fixef(nine)
+# ranef(nine) all zeros
+
+# 85
+eight_five = glmer(eight_five~X +(1|variable),family=poisson, data=df_all_sim)
+fixef(eight_five)
+
+# 80
+eight = glmer(eight~X +(1|variable),family=poisson, data=df_all_sim)
+fixef(eight)
+
+# 75
+seven_five = glmer(seven_five~X +(1|variable),family=poisson, data=df_all_sim)
+fixef(seven_five)
+
+# 70
+seven = glmer(seven~X +(1|variable),family=poisson, data=df_all_sim)
+fixef(seven)
+
+# 65
+six_five = glmer(six_five~X +(1|variable),family=poisson, data=df_all_sim)
+fixef(six_five)
+
+# 60
+six = glmer(six~X +(1|variable),family=poisson, data=df_all_sim)
+fixef(six)
+
+# 55
+five_five = glmer(five_five~X +(1|variable),family=poisson, data=df_all_sim)
+fixef(five_five)
+
+# 50
+five = glmer(five~X +(1|variable),family=poisson, data=df_all_sim)
+fixef(five)
+
+# 45
+four_five = glmer(four_five~X +(1|variable),family=poisson, data=df_all_sim)
+fixef(four_five)
+
+# 40
+four = glmer(four~X +(1|variable),family=poisson, data=df_all_sim)
+fixef(four)
+
+# 35
+three_five = glmer(three_five~X +(1|variable),family=poisson, data=df_all_sim)
+fixef(three_five)
+
+# 30
+three = glmer(three~X +(1|variable),family=poisson, data=df_all_sim)
+fixef(three)
+
+# 25
+two_five = glmer(two_five~X +(1|variable),family=poisson, data=df_all_sim)
+fixef(two_five)
+
+# 20
+two = glmer(two~X +(1|variable),family=poisson, data=df_all_sim)
+fixef(two)
+
+
+
+# graph change in fixed effects
+fixed = c(fixef(nine_five)[2], fixef(nine)[2], 
+          fixef(eight_five)[2], fixef(eight)[2], 
+          fixef(seven_five)[2], fixef(seven)[2], 
+          fixef(six_five)[2], fixef(six)[2], 
+          fixef(five_five)[2], fixef(five)[2], 
+          fixef(four_five)[2], fixef(four)[2], 
+          fixef(three_five)[2], fixef(three)[2], 
+          fixef(two_five)[2], fixef(two)[2])
+samp_prop = seq(from = .95, to = 0.2, by = -0.05)
+# fixed = as.matrix(unlist(append(samp_prop, fixed)), ncol=2, byrow) #ugh wont work but i want to visualize
+plot(nine_five) #lol wow
+plot(x=samp_prop, y=fixed)
+```
+
+## 6 Yule-Simon Model for True Dist
+
+```{r, echo=FALSE}
+library(VGAM)
+# true_dist_1
+
+# yulesimon(link = "loge", irho = NULL, nsimEIM = 200, zero = NULL)
+# https://www.rdocumentation.org/packages/VGAM/versions/0.9-7/topics/yulesimon
+# drop 0's got error with them
+true_temp = true_dist_1[c(1,2,3,4,5,6,7,8,9, 11, 12, 14, 20, 23),]
+# by hand - will need to do by loop
+df_true = as.data.frame(matrix(nrow=sum(true_temp$x), ncol=1))
+df_true[1:659,1]=1
+df_true[(659+1):(659+102),1]=2
+df_true[(761+1):(761+24),1]=3
+df_true[(785+1):(785+15),1]=4
+df_true[(800+1):(800+9),1]=5
+df_true[(809+1):(809+4),1]=6
+df_true[(813+1):(813+3),1]=7
+df_true[(816+1):(816+3),1]=8
+df_true[(819+1):(819+4),1]=9
+df_true[(823+1):(823+1),1]=11
+df_true[(824+1):(824+2),1]=12
+df_true[(826+1):(826+1),1]=14
+df_true[(827+1):(827+1),1]=20
+df_true[(828+1):(828+1),1]=23
+
+# for (row in 1:23){
+#   df_true[] = true_temp[row]
+# }
+
+model <- vglm(x ~ X, yulesimon, data = true_temp, trace = TRUE)
+# coef(model, matrix = TRUE)
+summary(model)
+
+# https://www.rdocumentation.org/packages/VGAM/versions/0.8-3/topics/predict.vglm
+true_temp$predict = predict(model, newdata=true_temp$x, type="response") # lol results make no sense 
+#maybe predicting on link scale
+
+
+```
+
+-sizes of each cluster is y, intercept only... estimate yule-simon... not assuming it varies with covariate... or could pile together and have sampling rate as x value (but would need to understand model better because knowing that's useful)
+-use predict to see (and find any diagnostic plots for vglm - see if there's patterns, etc - check package doc, software paper).. power law might not be accurate depending how end trails off
+-vglm help file to help for that (or the package file)
+-give understanding of yule-simon family next meeting (what is a vglm, etc) & how it relates to glm/what i've seen already
+
+
+
+```{r, warning=FALSE, echo=FALSE}
+# # test = 1:23
+# # df = as.data.frame(sim_dist_100[as.character(test),])
+# df = as.data.frame(sim_dist_100[1:23,])
+# test = melt(df, id.vars="X")
+# 
+model_true = glm(abs(jitter(value))~X,family=Gamma(link="log"), data=df)
+# summary(model_true)
+# model_true.diag <- boot::glm.diag(model_true)
+# print(glm.diag.plots(model_true, model_true.diag))
+# true_dist_1$predict = predict(model_true) #looking at this LOL no not at all
+# 
+# true_vs_model = ggplot(true_dist_1, aes(x=jitter(X), y=jitter(x))) +
+#     geom_point() +
+#     geom_point(aes(x=jitter(X), y=jitter(predict)), colour="red") +
+#     geom_smooth(method="loess", span=.1) +
+#     # ylim(0, ymax) +
+#     xlab("Cluster Size") +
+#     ylab("Number of Clusters ") +
+#     labs(title = paste("True Dist vs Fitted Model for Gamma(link=log)"), 
+#          subtitle = "Red is predicted, Black is actual (True Dist)")
+# print(true_vs_model)
+# #   # think about it - I'm not really looking for whether it fits a certain dist
+# #   # I'm looking to see if there's something that fits the true dist and
+# #   # the sim distributions and if there is a change in parameters
+# #   # surely can be done in non-parametric way... hmm.
+# #   model_lm = glm(abs(jitter(value))~X,family=Gamma(link="log"), data=df)
+# #   # model = stan_glm(abs(jitter(value))~X,family=Gamma(link="log"), data=df)
+# #   summary(model)
+# #   model_lm.diag <- boot::glm.diag(model_lm)
+# #   print(glm.diag.plots(model_lm, model_lm.diag))
+# # 
+# #   df$predict = predict(model_lm) #looking at this LOL no not at all
+# # 
+# # #   model_vs_sim = ggplot(df, aes(x=jitter(X), y=jitter(x))) +
+# # #     geom_point() +
+# # #     geom_point(aes(x=jitter(X), y=jitter(predict)), colour="red")
+# # #     geom_smooth(method="loess", span=.1) +
+# # #     ylim(0, ymax) +
+# # #     xlab("Cluster Size") +
+# # #     ylab("Number of Clusters ") +
+# # #     labs(title = paste("True Dist vs Fitted Model for Gamma(link=log)"),
+# # #          subtitle = "Red is predicted, Black is actual (True Dist)")
+# # # print(model_vs_sim)
+# } 
+# 
+# # note to self: 
+# # https://stats.stackexchange.com/questions/45401/how-to-validate-diagnose-a-gamma-glm-in-r
+```
+
+
+
+
+- what is this error that geom_smooth removed non-finite values
+- model_lm = glm(abs(jitter(value))~X,family=Gamma(link="log"), data=df) <-- did not converge?
+- model_true = glm(abs(jitter(x))~X,family=Gamma(link="log"), data=true_dist_1)
+ <- also did not converge
+ - Note there are lots of warnings but I hid them
+ 
+ - log scale on y axis (prob most of change is in tails which is currently hard to see )
+ - exponential (decay maybe overspursed) - do we see consistent across sampling rates (how parameters change)... if a glm isn't converging can increase the # of iterations that it runs (could need more time)
+- include a random effect
+- *Note: Each simulation within one proportion has its own random effect.*
+- what is the model form we want (quasipoisson, vs glmer with random effect b/c correlated between sims), sledgehammer - if it were exponential what would the rate param be... try a few diff ones (can get form for mle - if this were gamma (for alpha beta what would it be) - if I plot over my data... 
+-for component dist ppl often use power law distribution yule-simon dist (how to estimate params for this - or write optimizer) -- if none of the standard ones handle it well it's one of the few that follows this log-log (versus just the log in the others we're looking at)... how does shape change with log y only, how does shape change with log y and log x
+
+- is there a poisson for size and number of times that size occurred - doesn't look like we can do for glm
+- what we can do to expand (637 becomes 637 rows with 1, X1, 1)... ex: some function will do that (maybe "expand") (b/c we want each draw to be one cluster - what size is it)
+- then fit with just intercept term... x is a function of 1 + (1|variable)... single poisson with extra variability from diff simulations ... 
+- if this doesn't work can try the Yule-Simon (see if there's an implementation in R) 
+
+- big question after will be how to move parameters in this situation into bigger epidemic model
+
+- random websites:
+- https://stats.stackexchange.com/questions/153611/interpreting-random-effect-%20variance-in-glmer
+- https://en.wikipedia.org/wiki/Yule%E2%80%93Simon_distribution
