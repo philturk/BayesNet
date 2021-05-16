@@ -1,11 +1,11 @@
 library(reshape2)
 
-# we want one (mixed) model per % of the original sim
-# one model for .95, .9.... etc (so one df for each)
-# so we want a df where each component has it's own line in the df
+# --------------- GOAL OF DATA RESTRUCTURING ---------------
+# we want one df per proportion (.95, .9, ... .2)
+# where each component has it's own line
+# and another column specifies which simulation it's from
 
-# --------------- FUNCTIONS
-
+# --------------- FUNCTIONS ---------------
 # --------------SPLIT ONE SIMULATION
 split_one_sim = function(beg = 1, end = 23, dataframe = NULL){
   # beg is starting row in df to split
@@ -52,6 +52,10 @@ combine_all_sim = function(dataframe=NULL){
 # --------------- MELT ALL PROPORTIONS
 melt_all_props = function(data = sim_dist_100){
   library(reshape2)
+  # create one master df with the following columns:
+  # X - the size of the component
+  # variable - which sim it came from
+  # value - count of components
   
   beg_prop = seq(from = 1, to = 346, by = 23)
   end_prop = seq(from = 23, to = 368, by = 23)
@@ -72,18 +76,14 @@ melt_all_props = function(data = sim_dist_100){
 # ----- CODE TO RUN
 # load objects created in "sampling_sim.R"
 sim_dist_100 = read.csv("C://Code//msu//gra//BayesNet//Paper8//sim_dists.csv")
-true_dist = read.csv("C://Code//msu//gra//BayesNet//Paper8//true_dist.csv")
 
-# create one master df with columns
-# X - the size of the component
-# variable - which sim it came from
-# value - count of components
+# melt dataframe with all proportions and simulations into one master df_all_sim
 df_all_sim = melt_all_props(data = sim_dist_100)
-
+# define start and end rows in df_all_sim that separate each proportion
 start_row = seq(from = 1, to = 36800, by = 2300)
 end_row = seq(from = 2300, to = 36800, by = 2300)
 
-# future work - could make into loop would be cleaner
+# create a separate df for each proportion
 df_95 = combine_all_sim(dataframe = df_all_sim[start_row[1]:end_row[1],])
 df_9 = combine_all_sim(dataframe = df_all_sim[start_row[2]:end_row[2],]) 
 df_85 = combine_all_sim(dataframe = df_all_sim[start_row[3]:end_row[3],])
@@ -101,6 +101,23 @@ df_3 = combine_all_sim(dataframe = df_all_sim[start_row[14]:end_row[14],])
 df_25 = combine_all_sim(dataframe = df_all_sim[start_row[15]:end_row[15],])
 df_2 = combine_all_sim(dataframe = df_all_sim[start_row[16]:end_row[16],])
 
+# save each df into a separate csv
+write.csv(df_95,"C://Code//msu//gra//BayesNet//Paper8//proportions//prop95.csv", row.names = FALSE)
+write.csv(df_9,"C://Code//msu//gra//BayesNet//Paper8//proportions//prop90.csv", row.names = FALSE)
+write.csv(df_85,"C://Code//msu//gra//BayesNet//Paper8//proportions//prop85.csv", row.names = FALSE)
+write.csv(df_8,"C://Code//msu//gra//BayesNet//Paper8//proportions//prop80.csv", row.names = FALSE)
+write.csv(df_75,"C://Code//msu//gra//BayesNet//Paper8//proportions//prop75.csv", row.names = FALSE)
+write.csv(df_7,"C://Code//msu//gra//BayesNet//Paper8//proportions//prop70.csv", row.names = FALSE)
+write.csv(df_65,"C://Code//msu//gra//BayesNet//Paper8//proportions//prop65.csv", row.names = FALSE)
+write.csv(df_6,"C://Code//msu//gra//BayesNet//Paper8//proportions//prop60.csv", row.names = FALSE)
+write.csv(df_55,"C://Code//msu//gra//BayesNet//Paper8//proportions//prop55.csv", row.names = FALSE)
+write.csv(df_5,"C://Code//msu//gra//BayesNet//Paper8//proportions//prop50.csv", row.names = FALSE)
+write.csv(df_45,"C://Code//msu//gra//BayesNet//Paper8//proportions//prop45.csv", row.names = FALSE)
+write.csv(df_4,"C://Code//msu//gra//BayesNet//Paper8//proportions//prop40.csv", row.names = FALSE)
+write.csv(df_35,"C://Code//msu//gra//BayesNet//Paper8//proportions//prop35.csv", row.names = FALSE)
+write.csv(df_3,"C://Code//msu//gra//BayesNet//Paper8//proportions//prop30.csv", row.names = FALSE)
+write.csv(df_25,"C://Code//msu//gra//BayesNet//Paper8//proportions//prop25.csv", row.names = FALSE)
+write.csv(df_2,"C://Code//msu//gra//BayesNet//Paper8//proportions//prop20.csv", row.names = FALSE)
 
 
 # # --- check
@@ -174,4 +191,3 @@ df_2 = combine_all_sim(dataframe = df_all_sim[start_row[16]:end_row[16],])
 # 
 # sum(df_all_sim[start_row[2]:end_row[2],]$value) #76702  <- this should be the # of observations
 # 
-

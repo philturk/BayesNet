@@ -1,5 +1,5 @@
 ---
-title: "visualize_sim_dist"
+title: "Model - Mixed"
 author: "Gabrielle Lemire"
 date: "3/12/2021"
 output: pdf_document
@@ -11,48 +11,49 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Component Distribution for Simulated Genetic Networks
 
+<!-- nice explanation https://www.youtube.com/watch?v=s8q7_sXQ8Rs -->
+note to self - do we have enough between group separation to justify (intraclass correlation coeff)
+what does "intercept only model" mean in our case
+
 ```{r, warning=FALSE}
+# load packages and data
 library(ggplot2)
 library(rlist)
 library(reshape2)
 library(rstanarm)
 library(boot)
+library(lme4)
 
-sim_dist_100 = read.csv("sim_dists.csv")
-true_dist_1 = read.csv("true_dist.csv")
-samp_prop = seq(from = .95, to = 0.2, by = -0.05)
-# load extracted dataset
+df_95 = read.csv("C://Code//msu//gra//BayesNet//Paper8//proportions//prop95.csv")
+df_9 = read.csv("C://Code//msu//gra//BayesNet//Paper8//proportions//prop90.csv")
+df_85 = read.csv("C://Code//msu//gra//BayesNet//Paper8//proportions//prop85.csv")
+df_8 = read.csv("C://Code//msu//gra//BayesNet//Paper8//proportions//prop80.csv")
+df_75 = read.csv("C://Code//msu//gra//BayesNet//Paper8//proportions//prop75.csv")
+df_7 = read.csv("C://Code//msu//gra//BayesNet//Paper8//proportions//prop70.csv")
+df_65 = read.csv("C://Code//msu//gra//BayesNet//Paper8//proportions//prop65.csv")
+df_6 = read.csv("C://Code//msu//gra//BayesNet//Paper8//proportions//prop60.csv")
+df_55 = read.csv("C://Code//msu//gra//BayesNet//Paper8//proportions//prop55.csv")
+df_5 = read.csv("C://Code//msu//gra//BayesNet//Paper8//proportions//prop50.csv")
+df_45 = read.csv("C://Code//msu//gra//BayesNet//Paper8//proportions//prop45.csv")
+df_4 = read.csv("C://Code//msu//gra//BayesNet//Paper8//proportions//prop40.csv")
+df_35 = read.csv("C://Code//msu//gra//BayesNet//Paper8//proportions//prop35.csv")
+df_3 = read.csv("C://Code//msu//gra//BayesNet//Paper8//proportions//prop30.csv")
+df_25 = read.csv("C://Code//msu//gra//BayesNet//Paper8//proportions//prop25.csv")
+df_2 = read.csv("C://Code//msu//gra//BayesNet//Paper8//proportions//prop20.csv")
+# samp_prop = seq(from = .95, to = 0.2, by = -0.05)
 ```
 
-## 5 Mixed Model
+## Mixed Model
 
 - Outstanding: do visuals for posterior checks (did a plot for one - interpret? seems quite bad haha)
 - based on residual exponential decay not fitting -- but the smoothness across sampling rate is promising
-- do expansion before trying to fit
+- do expansion before trying to fit #done need to load and model
 
 ```{r}
-library(lme4)
-names(df_all_sim)[3] <- "nine_five"
-names(df_all_sim)[4] <- "nine"
-names(df_all_sim)[5] <- "eight_five"
-names(df_all_sim)[6] <- "eight"
-names(df_all_sim)[7] <- "seven_five"
-names(df_all_sim)[8] <- "seven"
-names(df_all_sim)[9] <- "six_five"
-names(df_all_sim)[10] <- "six"
-names(df_all_sim)[11] <- "five_five"
-names(df_all_sim)[12] <- "five"
-names(df_all_sim)[13] <- "four_five"
-names(df_all_sim)[14] <- "four"
-names(df_all_sim)[15] <- "three_five"
-names(df_all_sim)[16] <- "three"
-names(df_all_sim)[17] <- "two_five"
-names(df_all_sim)[18] <- "two"
-
 # compare for diff props
 # model_true = glmer(abs(jitter(as.character(0.95)))~X +(1|variable),family=poisson, data=df)
 # 95
-nine_five = glmer(nine_five~X +(1|variable),family=poisson, data=df_all_sim)
+nine_five = glmer(comp_size~(1|sim_1),family=poisson, data=df_95) 
 summary(nine_five)
 ranef(nine_five) #all zeros
 # coef(nine_five)
@@ -61,6 +62,10 @@ plot(nine_five)
 
 # 90
 nine = glmer(nine~X +(1|variable),family=poisson, data=df_all_sim)
+#where "variable" is simulation number
+# X is the component size
+# 
+
 fixef(nine)
 # ranef(nine) all zeros
 
@@ -137,47 +142,7 @@ plot(nine_five) #lol wow
 plot(x=samp_prop, y=fixed)
 ```
 
-## 6 Yule-Simon Model for True Dist
-
-```{r, echo=FALSE}
-library(VGAM)
-# true_dist_1
-
-# yulesimon(link = "loge", irho = NULL, nsimEIM = 200, zero = NULL)
-# https://www.rdocumentation.org/packages/VGAM/versions/0.9-7/topics/yulesimon
-# drop 0's got error with them
-true_temp = true_dist_1[c(1,2,3,4,5,6,7,8,9, 11, 12, 14, 20, 23),]
-# by hand - will need to do by loop
-df_true = as.data.frame(matrix(nrow=sum(true_temp$x), ncol=1))
-df_true[1:659,1]=1
-df_true[(659+1):(659+102),1]=2
-df_true[(761+1):(761+24),1]=3
-df_true[(785+1):(785+15),1]=4
-df_true[(800+1):(800+9),1]=5
-df_true[(809+1):(809+4),1]=6
-df_true[(813+1):(813+3),1]=7
-df_true[(816+1):(816+3),1]=8
-df_true[(819+1):(819+4),1]=9
-df_true[(823+1):(823+1),1]=11
-df_true[(824+1):(824+2),1]=12
-df_true[(826+1):(826+1),1]=14
-df_true[(827+1):(827+1),1]=20
-df_true[(828+1):(828+1),1]=23
-
-# for (row in 1:23){
-#   df_true[] = true_temp[row]
-# }
-
-model <- vglm(x ~ X, yulesimon, data = true_temp, trace = TRUE)
-# coef(model, matrix = TRUE)
-summary(model)
-
-# https://www.rdocumentation.org/packages/VGAM/versions/0.8-3/topics/predict.vglm
-true_temp$predict = predict(model, newdata=true_temp$x, type="response") # lol results make no sense 
-#maybe predicting on link scale
-
-
-```
+not sure what's relevant for mixed model
 
 -sizes of each cluster is y, intercept only... estimate yule-simon... not assuming it varies with covariate... or could pile together and have sampling rate as x value (but would need to understand model better because knowing that's useful)
 -use predict to see (and find any diagnostic plots for vglm - see if there's patterns, etc - check package doc, software paper).. power law might not be accurate depending how end trails off

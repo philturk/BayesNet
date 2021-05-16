@@ -1,0 +1,10 @@
+---
+title: "Model - Stretched Exponential"
+author: "Gabrielle Lemire"
+date: "3/12/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
