@@ -41,6 +41,7 @@ df_3 = read.csv("C://Code//msu//gra//BayesNet//Paper8//proportions//prop30.csv")
 df_25 = read.csv("C://Code//msu//gra//BayesNet//Paper8//proportions//prop25.csv")
 df_2 = read.csv("C://Code//msu//gra//BayesNet//Paper8//proportions//prop20.csv")
 # samp_prop = seq(from = .95, to = 0.2, by = -0.05)
+
 ```
 
 ## Mixed Model
@@ -50,96 +51,95 @@ df_2 = read.csv("C://Code//msu//gra//BayesNet//Paper8//proportions//prop20.csv")
 - do expansion before trying to fit #done need to load and model
 
 ```{r}
-# compare for diff props
-# model_true = glmer(abs(jitter(as.character(0.95)))~X +(1|variable),family=poisson, data=df)
+# --------------- COMPARE FOR DIFF PROP
+
 # 95
-nine_five = glmer(comp_size~(1|sim_1),family=poisson, data=df_95) 
-summary(nine_five)
+nine_five = glmer(comp_size~(1|simulation),family=poisson, data=df_95) 
+summary(nine_five) #intercept is .402
 ranef(nine_five) #all zeros
-# coef(nine_five)
+# coef(nine_five) #the same for all b/c random is zero
 fixef(nine_five)
-plot(nine_five)
+plot(nine_five) #what is this plotting and why is it a line at x=1.5
 
 # 90
-nine = glmer(nine~X +(1|variable),family=poisson, data=df_all_sim)
-#where "variable" is simulation number
-# X is the component size
-# 
-
+nine = glmer(comp_size~(1|simulation),family=poisson, data=df_9)
+ranef(nine) #also all zeros
 fixef(nine)
-# ranef(nine) all zeros
 
 # 85
-eight_five = glmer(eight_five~X +(1|variable),family=poisson, data=df_all_sim)
+eight_five = glmer(comp_size~(1|simulation),family=poisson, data=df_85) 
 fixef(eight_five)
 
 # 80
-eight = glmer(eight~X +(1|variable),family=poisson, data=df_all_sim)
+eight = glmer(comp_size~(1|simulation),family=poisson, data=df_8) 
 fixef(eight)
 
 # 75
-seven_five = glmer(seven_five~X +(1|variable),family=poisson, data=df_all_sim)
+seven_five = glmer(comp_size~(1|simulation),family=poisson, data=df_75)
 fixef(seven_five)
 
 # 70
-seven = glmer(seven~X +(1|variable),family=poisson, data=df_all_sim)
+seven = glmer(comp_size~(1|simulation),family=poisson, data=df_7)
 fixef(seven)
 
 # 65
-six_five = glmer(six_five~X +(1|variable),family=poisson, data=df_all_sim)
+six_five = glmer(comp_size~(1|simulation),family=poisson, data=df_65)
 fixef(six_five)
 
 # 60
-six = glmer(six~X +(1|variable),family=poisson, data=df_all_sim)
+six = glmer(comp_size~(1|simulation),family=poisson, data=df_6)
 fixef(six)
 
 # 55
-five_five = glmer(five_five~X +(1|variable),family=poisson, data=df_all_sim)
+five_five = glmer(comp_size~(1|simulation),family=poisson, data=df_55)
 fixef(five_five)
 
 # 50
-five = glmer(five~X +(1|variable),family=poisson, data=df_all_sim)
+five = glmer(comp_size~(1|simulation),family=poisson, data=df_5)
 fixef(five)
 
 # 45
-four_five = glmer(four_five~X +(1|variable),family=poisson, data=df_all_sim)
+four_five = glmer(comp_size~(1|simulation),family=poisson, data=df_45)
 fixef(four_five)
 
 # 40
-four = glmer(four~X +(1|variable),family=poisson, data=df_all_sim)
+four = glmer(comp_size~(1|simulation),family=poisson, data=df_4)
 fixef(four)
 
 # 35
-three_five = glmer(three_five~X +(1|variable),family=poisson, data=df_all_sim)
+three_five = glmer(comp_size~(1|simulation),family=poisson, data=df_35)
 fixef(three_five)
 
 # 30
-three = glmer(three~X +(1|variable),family=poisson, data=df_all_sim)
+three = glmer(comp_size~(1|simulation),family=poisson, data=df_3)
 fixef(three)
 
 # 25
-two_five = glmer(two_five~X +(1|variable),family=poisson, data=df_all_sim)
+two_five = glmer(comp_size~(1|simulation),family=poisson, data=df_25)
 fixef(two_five)
 
 # 20
-two = glmer(two~X +(1|variable),family=poisson, data=df_all_sim)
+two = glmer(comp_size~(1|simulation),family=poisson, data=df_2)
 fixef(two)
 
 
 
 # graph change in fixed effects
-fixed = c(fixef(nine_five)[2], fixef(nine)[2], 
-          fixef(eight_five)[2], fixef(eight)[2], 
-          fixef(seven_five)[2], fixef(seven)[2], 
-          fixef(six_five)[2], fixef(six)[2], 
-          fixef(five_five)[2], fixef(five)[2], 
-          fixef(four_five)[2], fixef(four)[2], 
-          fixef(three_five)[2], fixef(three)[2], 
-          fixef(two_five)[2], fixef(two)[2])
+fixed = c(fixef(nine_five), fixef(nine), 
+          fixef(eight_five), fixef(eight), 
+          fixef(seven_five), fixef(seven), 
+          fixef(six_five), fixef(six), 
+          fixef(five_five), fixef(five), 
+          fixef(four_five), fixef(four), 
+          fixef(three_five), fixef(three), 
+          fixef(two_five), fixef(two))
 samp_prop = seq(from = .95, to = 0.2, by = -0.05)
 # fixed = as.matrix(unlist(append(samp_prop, fixed)), ncol=2, byrow) #ugh wont work but i want to visualize
 plot(nine_five) #lol wow
-plot(x=samp_prop, y=fixed)
+plot(x=samp_prop, y=fixed, 
+     main="Plotting the Fixed Effect of an Intercept Only Poisson Mixed Model \n against Sampling Proportion",
+     xlab="Sampling Proportion", 
+     ylab="Fixed Effect") #still looks smooth (but with a slight curve, interesting)
 ```
 
 not sure what's relevant for mixed model

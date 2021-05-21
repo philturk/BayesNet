@@ -1,0 +1,494 @@
+---
+title: "Model - Power Law"
+author: "Gabrielle Lemire"
+date: "3/12/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(rlist)
+library(reshape2)
+library(rstanarm)
+library(boot)
+library(poweRlaw) #compare dists
+library(GLDEX) #remove zeros
+# load data
+# load objects created in "sampling_sim.R"
+sim_dist_100 = read.csv("C://Code//msu//gra//BayesNet//Paper8//sim_dists.csv")
+
+# --------------- MELT ALL PROPORTIONS
+melt_all_props = function(data = sim_dist_100){
+  library(reshape2)
+  # create one master df with the following columns:
+  # X - the size of the component
+  # variable - which sim it came from
+  # value - count of components
+  
+  beg_prop = seq(from = 1, to = 346, by = 23)
+  end_prop = seq(from = 23, to = 368, by = 23)
+  samp_prop = seq(from = .95, to = 0.2, by = -0.05)
+  df = data.frame()
+  df_all_sim = data.frame()
+  for (i in 1:length(beg_prop)){
+    beg = beg_prop[i]
+    end = end_prop[i]
+    df = as.data.frame(data[beg:end,])
+    df$X = c(1:23) #leave as 1 to 23 because all props should have this component count
+    df = melt(df, id.vars="X")
+    df_all_sim = rbind(df_all_sim, df)
+  }
+  return(df_all_sim)
+}
+
+# melt dataframe with all proportions and simulations into one master df_all_sim
+df_all_sim = melt_all_props(data = sim_dist_100)
+# define start and end rows in df_all_sim that separate each proportion
+# start_row = seq(from = 1, to = 36800, by = 2300)
+# end_row = seq(from = 2300, to = 36800, by = 2300)
+
+# data_95 = df_all_sim[start_row[1]:end_row[1],3]
+# data_9 = df_all_sim[start_row[2]:end_row[2],3]
+# data_85 = df_all_sim[start_row[3]:end_row[3],3]
+# data_8 = df_all_sim[start_row[4]:end_row[4],3]
+# data_75 = df_all_sim[start_row[5]:end_row[5],3]
+# data_7 = df_all_sim[start_row[6]:end_row[6],3]
+# data_65 = df_all_sim[start_row[7]:end_row[7],3]
+# data_6 = df_all_sim[start_row[8]:end_row[8],3]
+# data_55 = df_all_sim[start_row[9]:end_row[9],3]
+# data_5 = df_all_sim[start_row[10]:end_row[10],3]
+# data_45 = df_all_sim[start_row[11]:end_row[11],3]
+# data_4 = df_all_sim[start_row[12]:end_row[12],3]
+# data_35 = df_all_sim[start_row[13]:end_row[13],3]
+# data_3 = df_all_sim[start_row[14]:end_row[14],3]
+# data_25 = df_all_sim[start_row[15]:end_row[15],3]
+# data_2 = df_all_sim[start_row[16]:end_row[16],3]
+
+```
+
+# Visuals of Component Distribution for Simulated Genetic Networks
+
+note: poweRlaw also exists for Python https://github.com/jeffalstott/powerlaw
+
+
+```{r, warning=FALSE}
+# # sim_dist_100 = read.csv("sim_dists.csv")
+# true_dist_1 = read.csv("C://Code//msu//gra//BayesNet//Paper8//true_dist.csv")
+# # crossprod(true_dist_1$x, true_dist_1$X) #1258 ppl in original
+# # samp_prop = seq(from = .95, to = 0.2, by = -0.05)
+# # load extracted dataset
+# data_95 = df_all_sim[1:2300,]
+# 
+# plot(true_dist_1$X, true_dist_1$x, main="Component Distribution of Actual Data", xlab="Component size", ylab="Frequency")
+# plot(log(true_dist_1$X), log(true_dist_1$x), main="Log-Log Component Distribution of Actual Data", xlab="Component size", ylab="Frequency")
+# 
+# # sampling 95% 100 sims
+# plot(data_95$X, data_95$value, main="Component Distribution of 100 Samples \n of 95% from Actual Data", xlab="Component size", ylab="Frequency")
+# plot(log(data_95$X), log(data_95$value), main="Log-Log Component Distribution of 100 Samples \n of 95% from Actual Data", xlab="Component size", ylab="Frequency")
+```
+
+## Power Law following Moby example in Gillespie's paper
+
+```{r, echo=FALSE}
+data("moby", package = "poweRlaw")
+# moby is a bunch of integers which are frequencies of words
+# so a series with the frequency that each thing appears... so we don't need component size we just want the frequency of how often that component shows up... so 
+str(moby) #i don't know what int [1:n] means... not a list then?
+pl_m <- displ$new(moby)
+str(pl_m) #"S4 reference object" with x_min=min(dataset), alpha=NULL
+pl_m$getXmin() #1
+pl_m$getPars() #NULL
+
+# can choose an x_min and alpha
+pl_m$setXmin(5)
+pl_m$getXmin() #5
+pl_m$setPars(2)
+pl_m$getPars() #2
+
+# for a given x_min we can estimate alpha w MLE
+estimate_pars(pl_m) #1.9, what is the "value 14873 mean"
+
+# Alternatively, we can estimate the exponent using a parameter scan <-- what does this mean?
+estimate_pars(pl_m, pars = seq(1.5, 2.5, 0.01))
+
+# estimate x_min (p7, using method from 2.2)
+est_pl <- estimate_xmin(pl_m)
+# x_min is 7 and D(7)=.00825
+# gof refers to goodness of fit
+
+# we can set the power law object to have these optimal values as follows
+pl_m$setXmin(est_pl)
+plot(pl_m) #creates log log of plot
+lines(pl_m, col = 2) #adds the fitted distribution
+# can save as data to plot with other R packages
+dd = plot(pl_m)
+head(dd,3)
+
+# To fit other distributions, we follow a similar procedure. For example, to fit the discrete log normal distribution, we begin by creating a `dislnorm' object and estimating the parameters.
+# see page 8 for more lines of code
+
+# can get parameter uncertainty using bootstrapping method
+# By default the bootstrap function will use the MLE to infer the parameter values and check all values of xmin.
+```
+
+## Power Law for our data
+
+Discrete Distributions we have to compare fit to within the poweRlaw package:
+- $displ$ - power law
+- $dislnorm$ - log normal
+- $disexp$ - exponential
+- $dispois$ - poisson
+
+We have 12 possible comparisons per proportion:
+- PL vs LN, PL vs exp, PL vs Pois
+- LN vs PL, LN vs exp, LN vs Pois
+- exp vs PL, exp vs LN, exp vs Pois
+- Pois vs PL, Pois vs LN, Pois vs exp
+Note: order matters because we'll set our $x_{min}$ based on which one comes first in this order
+
+Some questions I have: does our x_min or alpha change for diff sampling rates? (I doubt x_min would change, but would be curious)... also if x_min is 1 then are we only looking at the tail where x=1 (because we don't include 0's)?
+
+### Trying out poweRlaw code with our data
+
+```{r, echo=FALSE}
+library(GLDEX)
+
+# # other data format
+# df_95 = read.csv("C://Code//msu//gra//BayesNet//Paper8//proportions//prop95.csv")
+# test = order(df_95$comp_size)
+# -----COMPARE PL TO LN USING PL X_MIN
+data_95 = df_all_sim[start_row[1]:end_row[1],3]
+data = fun.zero.omit(data_95) #function seems to work
+data = data[order(-data)]
+# length(data)
+# data[1400:1442]
+
+pl_95 =  displ$new(test)
+# estimate x_min
+est_pl_xmin <- estimate_xmin(pl_95) #x_min is 1, gof is .046
+pl_95$setXmin(est_pl_xmin$xmin)
+# for a given x_min we can estimate alpha w MLE
+est_pl_pars = estimate_pars(pl_95) #alpha = 1.46
+pl_95$setPars(est_pl_pars$pars)
+pl_95
+# plot(pl_95) #creates log log of plot - it looks weird
+# lines(pl_95, col = 2) #adds the fitted distribution?? not working
+# # can save as data to plot with other R packages
+# dd = plot(pl_95)
+# head(dd,3)
+# create lognormal object
+ln_95 <- dislnorm$new(test)
+# estimate x_min
+ln_95$setXmin(est_pl_xmin$xmin) #notice our x_min object is PL
+# estimate alpha based on best x_min
+est_ln_pars = estimate_pars(ln_95) #alpha = -3.75, 4 as params
+ln_95$setPars(est_ln_pars$pars)
+ln_95
+# compare the two objects we just created
+compare_pl_ln = compare_distributions(pl_95, ln_95) 
+plot(compare_pl_ln) #no idea what i'm looking at
+# interpret output - p5 of cran pdf
+
+# test_statistic The test statistic.
+
+# p_one_sided - A one-sided p-value, which is an upper limit on getting that small a log-likelihood ratio if the first distribution, d1, is actually true.... i.e. if it's actually power law will have a low/high p-value here . p-value = .99??
+
+# p_two_sided - A two-sided p-value, which is the probability of getting a log-likelihood ratio which deviates that much from zero in either direction, if the two distributions are actually equally good.... so low number means they're not equally good. yes.
+
+# ratio - A data frame with two columns. The first column is the x value and second column is the difference in log-likelihoods.
+length(compare_pl_ln$ratio) #2? lol
+
+
+# -----COMPARE PL TO LN USING PL X_MIN
+# choosing lognormal to compare fit to
+# create lognormal object
+ln_95 <- dislnorm$new(test)
+# estimate x_min
+est_ln_xmin <- estimate_xmin(ln_95) #x_min is 624, gof is .033
+ln_95$setXmin(est_ln_xmin$xmin)
+# estimate alpha based on best x_min
+est_ln_pars = estimate_pars(ln_95) #alpha = 6.46, .011 as params
+ln_95$setPars(est_ln_pars$pars)
+ln_95
+# create pl object with x_min value determined by ln
+pl_95 =  displ$new(test)
+# estimate x_min
+pl_95$setXmin(est_ln_xmin$xmin) #notice our x_min object is LN
+# for a given x_min we can estimate alpha w MLE
+est_pl_pars = estimate_pars(pl_95) #alpha = 1.46
+pl_95$setPars(est_pl_pars$pars)
+pl_95
+
+# compare the two objects we just created
+compare_ln_pl = compare_distributions(ln_95, pl_95)
+# getting this error (not sure why):
+# Error in if (p1 < 0.5) { : missing value where TRUE/FALSE needed
+# something about the results specific to this
+# retry after i change datatype going in
+
+
+```
+
+
+### Comparing Dists for one Simulation of 95% Sampling Rate
+
+**Notes from group meeting on May 21, 2021**: 
+
+tfidf - zipfl law freq vs rank... common for text analytics
+-add 1 to everything... he has seen it done for tfidf
+-there are variations on that
+-just add 1
+-expecting counts
+-might extend tail even longer if we multiply
+
+-share with phil and nicole
+
+-like an indicator __species
+-idf is inverse document relative freqncies (idf) -- usually cast as natual log of the ratio of # of docs in corpus / num of docs that contain the term... but if nothing then it contains a 0 ... so ppl will replace with a 1... but th way he teaches it ... polyamorous - a very common term that appears many times in many docs, and the upper extreme is going to be bounded by the ln(idf), and that term would be an indicator term or monogamous (very special and a characteristic signature for that corpus)...
+
+
+- does it maintain dist, do params change, etc as sample rate changes
+- in survival analysis - exp, weibull ,ln, etc... typical sop is likelihood ratio to compare pairs & proc life reg for gof of each model
+prob/proc __ metric -- to see what fit is like... generates a prob-prob or quant-quant plot, uses a mod of Kaplan-Meyer to compare points to line...
+- Nicole - sow e'd be thinking of cluster size as survival time... 
+
+- do we care about drop off of 1's
+- diff sim's
+
+- one or two page exec summary - Phil is interested
+- include that as a question -- send paper about missing data on linkage rates from Nicole
+- make plan to meet Phil, Nicole & I
+
+```{r}
+data_1 = df_all_sim[1:23,3]
+data_1 = fun.zero.omit(data_1) #function seems to work
+data_1 = data_1[order(-data_1)]
+
+# use to plug in
+model_pl = displ$new(data_1)
+model_ln = dislnorm$new(data_1)
+model_exp = disexp$new(data_1)
+model_pois = dispois$new(data_1)
+
+# double check that both give 22 as x_min, yes they do
+# testexp = disexp$new(data_1)
+# estimate_xmin(testexp) #gof is .38
+# testpois = dispois$new(data_1)
+# estimate_xmin(testpois) #gof is .67
+
+
+# compare others to PL
+compare_models = function(model_1, model_2, model_1_name = "model_1_name", model_2_name = "model_2_name", prop = "00%"){
+  library(poweRlaw)
+  # data - is a dataframe with frequencies of 
+  # component sizes or degrees (no zeros)
+  # model_object - as initiated by displ, dislnorm, disexp, or dispois
+  # model_name - is a string to ease interpretation of print outs
+  # x_min is determined by the pl object 
+  # since x_min for both models must be the same
+  print(paste("------------------", model_1_name, "versus", model_2_name, "for data prop", prop))
+  print(paste("default x_min of model_1", model_1_name,
+              as.character(model_1$xmin)))
+  print(paste("default x_min of model_2", model_2_name,
+              as.character(model_2$xmin)))
+  
+  # estimate and set x_min based on PL fit of data
+  est_xmin = estimate_xmin(model_1)
+  model_1$setXmin(est_xmin$xmin)
+  # estimate and set alpha based on x_min
+  est_pars_1 = estimate_pars(model_1)
+  model_1$setPars(est_pars_1$pars)
+  
+  print(paste("estimated x_min based on fitting data to model_1",
+              model_1_name, as.character(model_1$xmin), 
+              "estimated alpha is", as.character(model_1$pars)))
+  # set x_min based on PL fit of data
+  model_2$setXmin(est_xmin$xmin)
+  # estimate and set alpha based on x_min
+  est_pars_2 = estimate_pars(model_2)
+  model_2$setPars(est_pars_2$pars)
+  print(paste("estimated x_min ",
+              as.character(model_1$xmin), 
+              "is assigned to model_2", model_2_name,
+              "estimated alpha is", as.character(model_2$pars)))
+  print("with the same x_min we can compare models")
+  compare_models = compare_distributions(model_1, model_2)
+  print(paste("p value one sided is",
+               as.character(compare_models$p_one_sided)))
+  print(paste("p value two sided is",
+               as.character(compare_models$p_two_sided)))
+
+  return(compare_models)
+}
+
+```
+```{r}
+# POWER LAW compared to x
+compare_pl_ln = compare_models(model_1 = model_pl, 
+                                model_2 = model_ln, 
+                                model_1_name = "powerlaw", 
+                                model_2_name = "lognormal", 
+                                prop = "95%")
+
+compare_pl_exp = compare_models(model_1 = model_pl, 
+                                model_2 = model_exp, 
+                                model_1_name = "powerlaw", 
+                                model_2_name = "exponential", 
+                                prop = "95%")
+
+compare_pl_pois = compare_models(model_1 = model_pl, 
+                                model_2 = model_pois, 
+                                model_1_name = "powerlaw", 
+                                model_2_name = "poisson", 
+                                prop = "95%")
+
+# LOG NORMAL compared to x
+compare_ln_pl = compare_models(model_1 = model_ln, 
+                                model_2 = model_pl, 
+                                model_1_name = "lognormal", 
+                                model_2_name = "powerlaw", 
+                                prop = "95%")
+
+compare_ln_exp = compare_models(model_1 = model_ln, 
+                                model_2 = model_exp, 
+                                model_1_name = "lognormal", 
+                                model_2_name = "exponential", 
+                                prop = "95%")
+
+compare_ln_pois = compare_models(model_1 = model_ln, 
+                                model_2 = model_pois, 
+                                model_1_name = "lognormal", 
+                                model_2_name = "poisson", 
+                                prop = "95%")
+
+# EXPONENTIAL compared to x
+compare_exp_pl = compare_models(model_1 = model_exp, 
+                                model_2 = model_pl, 
+                                model_1_name = "exponential", 
+                                model_2_name = "powerlaw", 
+                                prop = "95%")
+
+# disturbing! why is function returning modified model object (default x_min is 22 now?! should be contained in the function/module environment!)
+compare_exp_ln = compare_models(model_1 = model_exp, 
+                                model_2 = model_ln, 
+                                model_1_name = "exponential", 
+                                model_2_name = "lognormal", 
+                                prop = "95%")
+
+compare_exp_pois = compare_models(model_1 = model_exp, 
+                                model_2 = model_pois, 
+                                model_1_name = "exponential", 
+                                model_2_name = "poisson", 
+                                prop = "95%")
+
+# POISSON compared to x
+compare_pois_pl = compare_models(model_1 = model_pois, 
+                                model_2 = model_pl, 
+                                model_1_name = "poisson", 
+                                model_2_name = "powerlaw", 
+                                prop = "95%")
+
+compare_pois_ln = compare_models(model_1 = model_pois, 
+                                model_2 = model_ln, 
+                                model_1_name = "poisson", 
+                                model_2_name = "lognormal", 
+                                prop = "95%")
+
+compare_pois_exp = compare_models(model_1 = model_pois, 
+                                model_2 = model_exp, 
+                                model_1_name = "poisson", 
+                                model_2_name = "exponential", 
+                                prop = "95%")
+```
+
+
+```{r}
+# rerun previous chunk with modified input by adding 1's
+data_2 = df_all_sim[1:23,3] + 1
+data_2 = data_1[order(-data_2)]
+
+# use to plug in
+model_pl = displ$new(data_2)
+model_ln = dislnorm$new(data_2)
+model_exp = disexp$new(data_2)
+model_pois = dispois$new(data_2)
+```
+
+## Yule-Simon Model for True Dist
+
+**Previous work. can probably delete but for now leaving it:**
+
+```{r, echo=FALSE}
+# library(VGAM)
+# # true_dist_1
+# 
+# # yulesimon(link = "loge", irho = NULL, nsimEIM = 200, zero = NULL)
+# # https://www.rdocumentation.org/packages/VGAM/versions/0.9-7/topics/yulesimon
+# # drop 0's got error with them
+# true_temp = true_dist_1[c(1,2,3,4,5,6,7,8,9, 11, 12, 14, 20, 23),]
+# # by hand - will need to do by loop
+# df_true = as.data.frame(matrix(nrow=sum(true_temp$x), ncol=1))
+# df_true[1:659,1]=1
+# df_true[(659+1):(659+102),1]=2
+# df_true[(761+1):(761+24),1]=3
+# df_true[(785+1):(785+15),1]=4
+# df_true[(800+1):(800+9),1]=5
+# df_true[(809+1):(809+4),1]=6
+# df_true[(813+1):(813+3),1]=7
+# df_true[(816+1):(816+3),1]=8
+# df_true[(819+1):(819+4),1]=9
+# df_true[(823+1):(823+1),1]=11
+# df_true[(824+1):(824+2),1]=12
+# df_true[(826+1):(826+1),1]=14
+# df_true[(827+1):(827+1),1]=20
+# df_true[(828+1):(828+1),1]=23
+# 
+# # for (row in 1:23){
+# #   df_true[] = true_temp[row]
+# # }
+# 
+# model <- vglm(x ~ X, yulesimon, data = true_temp, trace = TRUE)
+# # coef(model, matrix = TRUE)
+# summary(model)
+# 
+# # https://www.rdocumentation.org/packages/VGAM/versions/0.8-3/topics/predict.vglm
+# true_temp$predict = predict(model, newdata=true_temp$x, type="response") # lol results make no sense 
+# #maybe predicting on link scale
+# 
+
+```
+
+**old notes can probably delete but I'm a hoarder**:
+
+not sure if this is releva
+-sizes of each cluster is y, intercept only... estimate yule-simon... not assuming it varies with covariate... or could pile together and have sampling rate as x value (but would need to understand model better because knowing that's useful)
+-use predict to see (and find any diagnostic plots for vglm - see if there's patterns, etc - check package doc, software paper).. power law might not be accurate depending how end trails off
+-vglm help file to help for that (or the package file)
+-give understanding of yule-simon family next meeting (what is a vglm, etc) & how it relates to glm/what i've seen already
+
+
+- what is this error that geom_smooth removed non-finite values
+- model_lm = glm(abs(jitter(value))~X,family=Gamma(link="log"), data=df) <-- did not converge?
+- model_true = glm(abs(jitter(x))~X,family=Gamma(link="log"), data=true_dist_1)
+ <- also did not converge
+ - Note there are lots of warnings but I hid them
+ 
+ - log scale on y axis (prob most of change is in tails which is currently hard to see )
+ - exponential (decay maybe overspursed) - do we see consistent across sampling rates (how parameters change)... if a glm isn't converging can increase the # of iterations that it runs (could need more time)
+- include a random effect
+- *Note: Each simulation within one proportion has its own random effect.*
+- what is the model form we want (quasipoisson, vs glmer with random effect b/c correlated between sims), sledgehammer - if it were exponential what would the rate param be... try a few diff ones (can get form for mle - if this were gamma (for alpha beta what would it be) - if I plot over my data... 
+-for component dist ppl often use power law distribution yule-simon dist (how to estimate params for this - or write optimizer) -- if none of the standard ones handle it well it's one of the few that follows this log-log (versus just the log in the others we're looking at)... how does shape change with log y only, how does shape change with log y and log x
+
+- is there a poisson for size and number of times that size occurred - doesn't look like we can do for glm
+- what we can do to expand (637 becomes 637 rows with 1, X1, 1)... ex: some function will do that (maybe "expand") (b/c we want each draw to be one cluster - what size is it)
+- then fit with just intercept term... x is a function of 1 + (1|variable)... single poisson with extra variability from diff simulations ... 
+- if this doesn't work can try the Yule-Simon (see if there's an implementation in R) 
+
+- big question after will be how to move parameters in this situation into bigger epidemic model
+
+- random websites:
+- https://stats.stackexchange.com/questions/153611/interpreting-random-effect-%20variance-in-glmer
+- https://en.wikipedia.org/wiki/Yule%E2%80%93Simon_distribution
+- https://stackoverflow.com/questions/8936099/returning-multiple-objects-in-an-r-function alternatives to using the dollar sign to call model objects (for inside function)

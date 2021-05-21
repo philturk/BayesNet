@@ -83,6 +83,8 @@ df_all_sim = melt_all_props(data = sim_dist_100)
 start_row = seq(from = 1, to = 36800, by = 2300)
 end_row = seq(from = 2300, to = 36800, by = 2300)
 
+data_95 = df_all_sim[start_row[1]:end_row[1],3]
+
 # create a separate df for each proportion
 df_95 = combine_all_sim(dataframe = df_all_sim[start_row[1]:end_row[1],])
 df_9 = combine_all_sim(dataframe = df_all_sim[start_row[2]:end_row[2],]) 
