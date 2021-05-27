@@ -1,0 +1,307 @@
+---
+title: "Model - Power Law for One Simulation (degree distribution)"
+author: "Gabrielle Lemire"
+date: "3/12/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(rlist)
+library(reshape2)
+library(rstanarm)
+library(boot)
+library(poweRlaw) #compare dists
+library(GLDEX) #remove zeros
+# load data
+# load objects created in "sampling_sim.R"
+sim_dist_100 = read.csv("C://Code//msu//gra//BayesNet//Paper8//sim_dists-degree_dist.csv")
+
+# --------------- MELT ALL PROPORTIONS
+melt_all_props = function(data = sim_dist_100){
+  library(reshape2)
+  # create one master df with the following columns:
+  # X - the size of the component
+  # variable - which sim it came from
+  # value - count of components
+  
+  beg_prop = seq(from = 1, to = 346, by = 23)
+  end_prop = seq(from = 23, to = 368, by = 23)
+  samp_prop = seq(from = .95, to = 0.2, by = -0.05)
+  df = data.frame()
+  df_all_sim = data.frame()
+  for (i in 1:length(beg_prop)){
+    beg = beg_prop[i]
+    end = end_prop[i]
+    df = as.data.frame(data[beg:end,])
+    df$X = c(1:23) #leave as 1 to 23 because all props should have this component count
+    df = melt(df, id.vars="X")
+    df_all_sim = rbind(df_all_sim, df)
+  }
+  return(df_all_sim)
+}
+
+# melt dataframe with all proportions and simulations into one master df_all_sim
+df_all_sim = melt_all_props(data = sim_dist_100)
+```
+
+## Overview of work in this File
+
+**Copied from fitting component distributions. We are loading data for degree distributions instead.**
+
+In this file we compare the following discrete distributions' fit to our data (all found within the poweRlaw package).
+
+- $displ$ - power law
+- $dislnorm$ - log normal
+- $disexp$ - exponential
+- $dispois$ - poisson
+
+We have 12 possible comparisons per proportion:
+- PL vs LN, PL vs exp, PL vs Pois
+- LN vs PL, LN vs exp, LN vs Pois
+- exp vs PL, exp vs LN, exp vs Pois
+- Pois vs PL, Pois vs LN, Pois vs exp
+Note: order matters because we'll set our $x_{min}$ based on which one comes first in this order.
+
+**Note: poweRlaw also exists for Python https://github.com/jeffalstott/powerlaw**
+
+## Comparing Dists for one Simulation of 95% Sampling Rate
+
+### Load Data, Create Models, Create Function for Comparing
+
+```{r}
+data_1 = df_all_sim[1:23,3]
+data_1 = fun.zero.omit(data_1) #function seems to work
+data_1 = data_1[order(-data_1)]
+
+# use to plug in
+model_pl = displ$new(data_1)
+model_ln = dislnorm$new(data_1)
+model_exp = disexp$new(data_1)
+model_pois = dispois$new(data_1)
+
+# double check that both give 22 as x_min, yes they do
+# testexp = disexp$new(data_1)
+# estimate_xmin(testexp) #gof is .38
+# testpois = dispois$new(data_1)
+# estimate_xmin(testpois) #gof is .67
+
+
+# compare others to PL
+compare_models = function(model_1, model_2, model_1_name = "model_1_name", model_2_name = "model_2_name", prop = "00%"){
+  library(poweRlaw)
+  # data - is a dataframe with frequencies of 
+  # component sizes or degrees (no zeros)
+  # model_object - as initiated by displ, dislnorm, disexp, or dispois
+  # model_name - is a string to ease interpretation of print outs
+  # x_min is determined by the pl object 
+  # since x_min for both models must be the same
+  print(paste("------------------", model_1_name, "versus", model_2_name, "for data prop", prop))
+  print(paste("default x_min of model_1", model_1_name,
+              as.character(model_1$xmin)))
+  print(paste("default x_min of model_2", model_2_name,
+              as.character(model_2$xmin)))
+  
+  # estimate and set x_min based on PL fit of data
+  est_xmin = estimate_xmin(model_1)
+  model_1$setXmin(est_xmin$xmin)
+  # estimate and set alpha based on x_min
+  est_pars_1 = estimate_pars(model_1)
+  model_1$setPars(est_pars_1$pars)
+  
+  print(paste("estimated x_min based on fitting data to model_1",
+              model_1_name, as.character(model_1$xmin), 
+              "estimated alpha is", as.character(model_1$pars)))
+  # set x_min based on PL fit of data
+  model_2$setXmin(est_xmin$xmin)
+  # estimate and set alpha based on x_min
+  est_pars_2 = estimate_pars(model_2)
+  model_2$setPars(est_pars_2$pars)
+  print(paste("estimated x_min ",
+              as.character(model_1$xmin), 
+              "is assigned to model_2", model_2_name,
+              "estimated alpha is", as.character(model_2$pars)))
+  print("with the same x_min we can compare models")
+  compare_models = compare_distributions(model_1, model_2)
+  print(paste("p value one sided is",
+               as.character(compare_models$p_one_sided)))
+  print(paste("p value two sided is",
+               as.character(compare_models$p_two_sided)))
+
+  return(compare_models)
+}
+```
+
+### Create Function to run Comparison of all Models
+
+```{r}
+# POWER LAW compared to x
+compare_all_combos = function(){
+  compare_pl_ln = compare_models(model_1 = model_pl, 
+                                  model_2 = model_ln, 
+                                  model_1_name = "powerlaw", 
+                                  model_2_name = "lognormal", 
+                                  prop = "95%")
+  
+  compare_pl_exp = compare_models(model_1 = model_pl, 
+                                  model_2 = model_exp, 
+                                  model_1_name = "powerlaw", 
+                                  model_2_name = "exponential", 
+                                  prop = "95%")
+  
+  compare_pl_pois = compare_models(model_1 = model_pl, 
+                                  model_2 = model_pois, 
+                                  model_1_name = "powerlaw", 
+                                  model_2_name = "poisson", 
+                                  prop = "95%")
+  
+  # LOG NORMAL compared to x
+  compare_ln_pl = compare_models(model_1 = model_ln, 
+                                  model_2 = model_pl, 
+                                  model_1_name = "lognormal", 
+                                  model_2_name = "powerlaw", 
+                                  prop = "95%")
+  
+  compare_ln_exp = compare_models(model_1 = model_ln, 
+                                  model_2 = model_exp, 
+                                  model_1_name = "lognormal", 
+                                  model_2_name = "exponential", 
+                                  prop = "95%")
+  
+  compare_ln_pois = compare_models(model_1 = model_ln, 
+                                  model_2 = model_pois, 
+                                  model_1_name = "lognormal", 
+                                  model_2_name = "poisson", 
+                                  prop = "95%")
+  
+  # EXPONENTIAL compared to x
+  compare_exp_pl = compare_models(model_1 = model_exp, 
+                                  model_2 = model_pl, 
+                                  model_1_name = "exponential", 
+                                  model_2_name = "powerlaw", 
+                                  prop = "95%")
+  
+  # disturbing! why is function returning modified model object (default x_min is 22   now?! should be contained in the function/module environment!)
+  compare_exp_ln = compare_models(model_1 = model_exp, 
+                                  model_2 = model_ln, 
+                                  model_1_name = "exponential", 
+                                  model_2_name = "lognormal", 
+                                  prop = "95%")
+  
+  compare_exp_pois = compare_models(model_1 = model_exp, 
+                                  model_2 = model_pois, 
+                                  model_1_name = "exponential", 
+                                  model_2_name = "poisson", 
+                                  prop = "95%")
+  
+  # POISSON compared to x
+  compare_pois_pl = compare_models(model_1 = model_pois, 
+                                  model_2 = model_pl, 
+                                  model_1_name = "poisson", 
+                                  model_2_name = "powerlaw", 
+                                  prop = "95%")
+  
+  compare_pois_ln = compare_models(model_1 = model_pois, 
+                                  model_2 = model_ln, 
+                                  model_1_name = "poisson", 
+                                  model_2_name = "lognormal", 
+                                  prop = "95%")
+  
+  compare_pois_exp = compare_models(model_1 = model_pois, 
+                                  model_2 = model_exp, 
+                                  model_1_name = "poisson", 
+                                  model_2_name = "exponential", 
+                                  prop = "95%")
+}
+
+compare_all_combos()
+```
+
+
+### Load Data with added 1's, Create Models, Run Function for Comparing all the new Models (with added one's)
+
+
+```{r}
+# rerun previous chunk with modified input by adding 1's
+data_2 = df_all_sim[1:23,3] + 1
+data_2 = data_2[order(-data_2)]
+
+# use to plug in
+model_pl = displ$new(data_2)
+model_ln = dislnorm$new(data_2)
+model_exp = disexp$new(data_2)
+model_pois = dispois$new(data_2)
+
+compare_all_combos()
+
+```
+
+
+### Generate Visuals to Compare Models
+
+
+```{r}
+# note to self - if i make into a loop add a vertical line where x_min is
+
+# let's visually compare exp vs PL
+# use data_2 i.e. with adding 1
+
+model_exp$setXmin(5)
+model_exp$setPars(estimate_pars(model_exp))
+
+model_pl$setXmin(5)
+model_pl$setPars(estimate_pars(model_pl))
+
+compare_distributions(model_exp, model_pl)
+
+plot(model_pl, ylab = "CDF", main="Comparing Power Law (red) and Exponential (black), x_min = 5")
+lines(model_exp) #fit looks terrible lol
+lines(model_pl, col = 2, lty = 2) #fit looks much better
+
+# let's visually compare exp vs LN
+# use data_2 i.e. with adding 1
+
+model_exp$setXmin(2)
+model_exp$setPars(estimate_pars(model_exp))
+
+model_ln$setXmin(2)
+model_ln$setPars(estimate_pars(model_ln))
+
+compare_distributions(model_exp, model_ln)
+
+plot(model_ln, ylab = "CDF", main="Comparing Lognormal (red) and Exponential (black), x_min = 2")
+lines(model_exp) #fit looks terrible lol
+lines(model_ln, col = 2, lty = 2) #fit looks much better - not as good as PL but why is it hitting the y-axis, x=0?
+
+# let's visually compare PL vs LN for x_min=1
+# use data_2 i.e. with adding 1
+
+model_pl$setXmin(2)
+model_pl$setPars(estimate_pars(model_pl))
+
+model_ln$setXmin(2)
+model_ln$setPars(estimate_pars(model_ln))
+
+compare_distributions(model_pl, model_ln)$p_one_sided
+compare_distributions(model_pl, model_ln)$p_two_sided
+
+plot(model_ln, ylab = "CDF", main="Comparing Lognormal (red) and Power Law (black), x_min = 2") #note it's just taking the data so doesn't matter if we plot model_ln or model_pl (based on trying both and it looking the same)
+lines(model_pl) #fit looks terrible lol
+lines(model_ln, col = 2, lty = 2) #fit looks much better - not as good as PL but why is it hitting the y-axis, x=0?
+```
+
+
+**Notes from group meeting on May 21, 2021**: 
+
+- zipfl law freq vs rank... common for text analytics
+-like an indicator __species
+-idf is inverse document relative freqncies (idf) -- usually cast as natual log of the ratio of # of docs in corpus / num of docs that contain the term... but if nothing then it contains a 0 ... so ppl will replace with a 1... but th way he teaches it ... polyamorous - a very common term that appears many times in many docs, and the upper extreme is going to be bounded by the ln(idf), and that term would be an indicator term or monogamous (very special and a characteristic signature for that corpus)...
+
+- does it maintain dist, do params change, etc as sample rate changes
+- in survival analysis - exp, weibull ,ln, etc... typical sop is likelihood ratio to compare pairs & proc life reg for gof of each model
+prob/proc __ metric -- to see what fit is like... generates a prob-prob or quant-quant plot, uses a mod of Kaplan-Meyer to compare points to line...
+- Nicole - sow e'd be thinking of cluster size as survival time... 
+
+- do we care about drop off of 1's
+- diff sim's

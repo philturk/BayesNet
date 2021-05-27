@@ -1,5 +1,8 @@
+library(sna)
+library(janitor)
+
 #Build complete genetic network
-source("Network.R")
+source("C://Code//msu//gra//BayesNet//Paper8//Network.R")
 
 #Independent sub-samples of network to take for each sampling proportion
 nsims <- 100
@@ -9,16 +12,15 @@ nsims <- 100
 samp_prop <- seq(from = .95, to = 0.2, by = -0.05)
 
 #Compute cluster size distribution for complete network
-library(sna)
 # what we would have if we sampled everyone in the pop
-true_dist <- component.dist(GeneticNetwork)$cdist[1:23]
-Z
+true_dist <- unname(unlist(tabyl(factor(degree(GeneticNetwork, gmode="graph"), levels=0:20))[2]))
+
 #Establish array to store simulated data for each simulation at each sampling proportion.
-#Can assume clusters only get smaller, so max of size = 23 is sufficient (max size in full net)
+#Can assume degrees only get smaller, so max of size = 21 is sufficient (max size in full net)
 # if we didn't know true dist and we picked diff sample sizes what
 # would we infer the population looks like
-sim_dist <- array(NA, dim = c(length(samp_prop), 23, nsims), 
-                  dimnames = list(samp_prop, 1:23, NULL))
+sim_dist <- array(NA, dim = c(length(samp_prop), 21, nsims), 
+                  dimnames = list(samp_prop, 1:21, NULL))
 
 for(i in 1:length(samp_prop)){
   sample_rate <- samp_prop[i]
@@ -29,16 +31,17 @@ for(i in 1:length(samp_prop)){
     #Build subnetwork without deleted vertices
     sampledNetwork <- network(GeneticNetwork[-deleted_vertices, -deleted_vertices])
     
-    #Compute cluster size distribution and store
-    sim_dist[i,,j] <- component.dist(sampledNetwork)$cdist[1:23]
+    # put degree distribution in factor form to add zeros where count=0
+    # dd = factor(degree(sampledNetwork, gmode="graph"), levels=0:20)
+    # dd = tabyl(dd)[2]
+    # dd = unname(unlist(dd))
+
+    #Store degree distribution in object
+    sim_dist[i,,j] <- unname(unlist(tabyl(factor(degree(sampledNetwork, gmode="graph"), levels=0:20))[2]))
   }
 }
-
 #Save the results
 #save()
-# cool this worked and it's in the format where columns are simulations.
-# and the first 23 rows are for .95, 
-# second 23 rows are for .80...etc (20 1+368 rows total (includes header))
+
 new_list <- plyr::adply(sim_dist,1,unlist,.id = NULL)
-write.csv(new_list, "sim_dists.csv")
-write.csv(true_dist, "true_dist.csv")
+write.csv(new_list, "C://Code//msu//gra//BayesNet//Paper8//sim_dists-degree_dist.csv")
