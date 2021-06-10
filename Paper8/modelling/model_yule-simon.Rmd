@@ -1,5 +1,5 @@
 ---
-title: "Model - Power Law"
+title: "Model - Yule Simon for Component Distribution"
 author: "Gabrielle Lemire"
 date: "3/12/2021"
 output: pdf_document
@@ -44,360 +44,137 @@ melt_all_props = function(data = sim_dist_100){
 
 # melt dataframe with all proportions and simulations into one master df_all_sim
 df_all_sim = melt_all_props(data = sim_dist_100)
+
+# Data for one simulation of prop=.95
+data_1 = df_all_sim[1:23,3]
+data_1 = data_1[order(-data_1)] #wait why are we ordering this?
+
+# Data for one simulation of prop=.95 adding 1's
+data_2 = df_all_sim[1:23,3] + 1
+data_2 = data_2[order(-data_2)] #wait why are we ordering this?
 ```
 
 ## Overview of work in this File
 
-**Previous version of this file has example with "moby" word frequency dataset found in Gillespie's paper (2015) Previous version of this file also had an example with our data not in a loop. Since we used what we needed from those examples we removed that code from the file (you can find it in previous commit 02fa54f).**
+While discussing results from running comparisons with the poweRlaw package between four distributions (power law, log normal, exponential and poisson) we found that power law and log normal both fit different parts of the curve better and exponential and poisson have a poor fit. We want to see if adding another degree of freedom will allow the fit of the curve to be better and want to explore the option of Yule-Simon. 
 
-In this file we compare the following discrete distributions' fit to our data (all found within the poweRlaw package).
+<!-- two params - combine models? -->
+<!-- ex Yule Simon (extra degree of freedom might be enough to capture) -->
+<!-- can we add the extra data... add simulations -->
+<!-- how to add simulations?... try to do it just add them as extra points -->
 
-- $displ$ - power law
-- $dislnorm$ - log normal
-- $disexp$ - exponential
-- $dispois$ - poisson
-
-We have 12 possible comparisons per proportion:
-- PL vs LN, PL vs exp, PL vs Pois
-- LN vs PL, LN vs exp, LN vs Pois
-- exp vs PL, exp vs LN, exp vs Pois
-- Pois vs PL, Pois vs LN, Pois vs exp
-Note: order matters because we'll set our $x_{min}$ based on which one comes first in this order.
-
-**Note: poweRlaw also exists for Python https://github.com/jeffalstott/powerlaw**
-
-## Power Law for on Simulation in our Data
+## Yule-Simon Model for Component Distribution
 
 ```{r, echo=FALSE}
-# -----COMPARE PL TO LN USING PL X_MIN
-data_95 = df_all_sim[start_row[1]:end_row[1],3]
-data = fun.zero.omit(data_95) #function seems to work
-data = data[order(-data)]
+library(VGAM)
+data = data.frame(comp = 1:23, count = data_2)
+# from "yulesimon" example in cran docs:
+model = VGAM::vglm(count ~ comp, yulesimon, data = data, trace = TRUE)
+# https://www.rdocumentation.org/packages/VGAM/versions/0.9-0/topics/yulesimon
+coef(model, matrix = TRUE)
+summary(model)
+VGAM::plotvglm(model)
+head(fitted(model)) #why are these all NAs?
+
+
+# https://www.rdocumentation.org/packages/VGAM/versions/0.8-3/topics/predict.vglm
+data$predict = predict(model, newdata=data$count, type="response")
+
+
+# easier to see on actual vs predicted curve -- create that
+# are they unstandardized pearson residuals (in image), so will depend on link function
+# it might be an improvement because residuals on either side
+# looks promising
+# because no scale of how on/off it is (compare to others)
+
+# everything suggests just rho so not sure what two parameters do to it?
 ```
 
-Some questions I have: does our x_min or alpha change for diff sampling rates? (I doubt x_min would change, but would be curious)... also if x_min is 1 then are we only looking at the tail where x=1 (because we don't include 0's)?
-
-### Comparing Dists for one Simulation of 95% Sampling Rate
+## Build Model in Loop - WIP
 
 ```{r}
-data_1 = df_all_sim[1:23,3]
-data_1 = fun.zero.omit(data_1) #function seems to work
-data_1 = data_1[order(-data_1)]
 
-# use to plug in
-model_pl = displ$new(data_1)
-model_ln = dislnorm$new(data_1)
-model_exp = disexp$new(data_1)
-model_pois = dispois$new(data_1)
-
-# double check that both give 22 as x_min, yes they do
-# testexp = disexp$new(data_1)
-# estimate_xmin(testexp) #gof is .38
-# testpois = dispois$new(data_1)
-# estimate_xmin(testpois) #gof is .67
-
-
-# compare others to PL
-compare_models = function(model_1, model_2, model_1_name = "model_1_name", model_2_name = "model_2_name", prop = "00%"){
-  library(poweRlaw)
-  # data - is a dataframe with frequencies of 
-  # component sizes or degrees (no zeros)
-  # model_object - as initiated by displ, dislnorm, disexp, or dispois
-  # model_name - is a string to ease interpretation of print outs
-  # x_min is determined by the pl object 
-  # since x_min for both models must be the same
-  print(paste("------------------", model_1_name, "versus", model_2_name, "for data prop", prop))
-  print(paste("default x_min of model_1", model_1_name,
-              as.character(model_1$xmin)))
-  print(paste("default x_min of model_2", model_2_name,
-              as.character(model_2$xmin)))
-  
-  # estimate and set x_min based on PL fit of data
-  est_xmin = estimate_xmin(model_1)
-  model_1$setXmin(est_xmin$xmin)
-  # estimate and set alpha based on x_min
-  est_pars_1 = estimate_pars(model_1)
-  model_1$setPars(est_pars_1$pars)
-  
-  print(paste("estimated x_min based on fitting data to model_1",
-              model_1_name, as.character(model_1$xmin), 
-              "estimated alpha is", as.character(model_1$pars)))
-  # set x_min based on PL fit of data
-  model_2$setXmin(est_xmin$xmin)
-  # estimate and set alpha based on x_min
-  est_pars_2 = estimate_pars(model_2)
-  model_2$setPars(est_pars_2$pars)
-  print(paste("estimated x_min ",
-              as.character(model_1$xmin), 
-              "is assigned to model_2", model_2_name,
-              "estimated alpha is", as.character(model_2$pars)))
-  print("with the same x_min we can compare models")
-  compare_models = compare_distributions(model_1, model_2)
-  print(paste("p value one sided is",
-               as.character(compare_models$p_one_sided)))
-  print(paste("p value two sided is",
-               as.character(compare_models$p_two_sided)))
-
-  return(compare_models)
-}
-
-```
-```{r}
-# POWER LAW compared to x
-compare_pl_ln = compare_models(model_1 = model_pl, 
-                                model_2 = model_ln, 
-                                model_1_name = "powerlaw", 
-                                model_2_name = "lognormal", 
-                                prop = "95%")
-
-compare_pl_exp = compare_models(model_1 = model_pl, 
-                                model_2 = model_exp, 
-                                model_1_name = "powerlaw", 
-                                model_2_name = "exponential", 
-                                prop = "95%")
-
-compare_pl_pois = compare_models(model_1 = model_pl, 
-                                model_2 = model_pois, 
-                                model_1_name = "powerlaw", 
-                                model_2_name = "poisson", 
-                                prop = "95%")
-
-# LOG NORMAL compared to x
-compare_ln_pl = compare_models(model_1 = model_ln, 
-                                model_2 = model_pl, 
-                                model_1_name = "lognormal", 
-                                model_2_name = "powerlaw", 
-                                prop = "95%")
-
-compare_ln_exp = compare_models(model_1 = model_ln, 
-                                model_2 = model_exp, 
-                                model_1_name = "lognormal", 
-                                model_2_name = "exponential", 
-                                prop = "95%")
-
-compare_ln_pois = compare_models(model_1 = model_ln, 
-                                model_2 = model_pois, 
-                                model_1_name = "lognormal", 
-                                model_2_name = "poisson", 
-                                prop = "95%")
-
-# EXPONENTIAL compared to x
-compare_exp_pl = compare_models(model_1 = model_exp, 
-                                model_2 = model_pl, 
-                                model_1_name = "exponential", 
-                                model_2_name = "powerlaw", 
-                                prop = "95%")
-
-# disturbing! why is function returning modified model object (default x_min is 22 now?! should be contained in the function/module environment!)
-compare_exp_ln = compare_models(model_1 = model_exp, 
-                                model_2 = model_ln, 
-                                model_1_name = "exponential", 
-                                model_2_name = "lognormal", 
-                                prop = "95%")
-
-compare_exp_pois = compare_models(model_1 = model_exp, 
-                                model_2 = model_pois, 
-                                model_1_name = "exponential", 
-                                model_2_name = "poisson", 
-                                prop = "95%")
-
-# POISSON compared to x
-compare_pois_pl = compare_models(model_1 = model_pois, 
-                                model_2 = model_pl, 
-                                model_1_name = "poisson", 
-                                model_2_name = "powerlaw", 
-                                prop = "95%")
-
-compare_pois_ln = compare_models(model_1 = model_pois, 
-                                model_2 = model_ln, 
-                                model_1_name = "poisson", 
-                                model_2_name = "lognormal", 
-                                prop = "95%")
-
-compare_pois_exp = compare_models(model_1 = model_pois, 
-                                model_2 = model_exp, 
-                                model_1_name = "poisson", 
-                                model_2_name = "exponential", 
-                                prop = "95%")
-```
-
-
-```{r}
-# rerun previous chunk with modified input by adding 1's
 data_2 = df_all_sim[1:23,3] + 1
 data_2 = data_2[order(-data_2)]
+data = data.frame(comp = 1:23, count = data_2)
 
-# use to plug in
-model_pl = displ$new(data_2)
-model_ln = dislnorm$new(data_2)
-model_exp = disexp$new(data_2)
-model_pois = dispois$new(data_2)
+df_all_sim
 
-```
+# --- get first simulation from each proportion to build model with
+data_comp = data.frame(comp=1:23)
+beg_sim_line = seq(from = 1, to = 36800, by = 2300)
+end_sim_line = seq(from = 23, to = 36800, by = 2300)
+samp_prop = seq(from = .95, to = 0.2, by = -0.05)
+samp_prop_names = c("ninefive", "nine", "eightfive", "eight", "sevenfive", "seven", "sixfive", "six", "fivefive", "five", "fourfive", "four", "threefive", "three", "twofive", "two")
 
-```{r}
-library(poweRlaw)
-# note to self - if i make into a loop add a vertical line where x_min is
+# can start out by just calling and storing certain things about the model
+# store diagnostic plots etc
 
-# let's visually compare exp vs PL
-# use data_2 i.e. with adding 1
+for (i in 1:16){
+  # library(reshape2)
+  beg = beg_sim_line[i]
+  end = end_sim_line[i]
+  data_comp[as.character(samp_prop_names[i])] = df_all_sim[beg:end,3] + 1
+}
+# --- run model on first simulation from each proportion
+models_comp <- list()
+# i=1
+for (i in 1:16) {
+  models_comp[as.character(samp_prop_names[i])]<-  
+    # lm(y ~., data.frame(poly(x, i)))
+    #     print(summary(mod[[i]]))
+}
 
-model_exp$setXmin(1)
-model_exp$setPars(estimate_pars(model_exp))
-
-model_pl$setXmin(1)
-model_pl$setPars(estimate_pars(model_pl))
-
-compare_distributions(model_exp, model_pl)
-
-plot(model_pl, ylab = "CDF", main="Comparing Power Law (red) and Exponential (black), x_min = 1")
-lines(model_exp) #fit looks terrible lol
-lines(model_pl, col = 2, lty = 2) #fit looks much better
-
-# let's visually compare exp vs LN
-# use data_2 i.e. with adding 1
-
-model_exp$setXmin(1)
-model_exp$setPars(estimate_pars(model_exp))
-
-model_ln$setXmin(1)
-model_ln$setPars(estimate_pars(model_ln))
-
-compare_distributions(model_exp, model_ln)
-
-plot(model_ln, ylab = "CDF", main="Comparing Lognormal (red) and Exponential (black), x_min = 1")
-lines(model_exp) #fit looks terrible lol
-lines(model_ln, col = 2, lty = 2) #fit looks much better - not as good as PL but why is it hitting the y-axis, x=0?
-
-# let's visually compare PL vs LN for x_min=1
-# use data_2 i.e. with adding 1
-
-model_pl$setXmin(1)
-model_pl$setPars(estimate_pars(model_pl))
-
-model_ln$setXmin(1)
-model_ln$setPars(estimate_pars(model_ln))
-
-compare_distributions(model_pl, model_ln)$p_one_sided
-compare_distributions(model_pl, model_ln)$p_two_sided
-
-plot(model_ln, ylab = "CDF", main="Comparing Lognormal (red) and Power Law (black), x_min = 1") #note it's just taking the data so doesn't matter if we plot model_ln or model_pl (based on trying both and it looking the same)
-lines(model_pl) #fit looks terrible lol
-lines(model_ln, col = 2, lty = 2) #fit looks much better - not as good as PL but why is it hitting the y-axis, x=0?
-
-# two params - combine models?
-# ex Yule Simon (extra degree of freedom might be enough to capture)
-# can we add the extra data... add simulations
-# how to add simulations? ... try to do it just add them as extra points
-```
-
-### Interpreting one sided p values
-
-Assuming two sided p value is small enough, low one sided p value means the first model is a better fit.
-
-```{r}
-# redo example to confirm underdstanding of one sided p-value
-set.seed(1)
-x = rpldis(1000, xmin = 2, alpha = 3)
-m1 = displ$new(x)
-m1$setPars(estimate_pars(m1))
-m2 = dispois$new(x)
-m2$setPars(estimate_pars(m2))
-plot(m2, ylab = "CDF")
-lines(m1)
-lines(m2, col = 2, lty = 2)
-compare_distributions(m1, m2)$p_one_sided #.026 "suggests power-law models gives a better fit" which is m1... so low number means first one is better fit
-
-compare_distributions(m1, m2)$p_two_sided #.05
-# means  we  can  rejectH0sincep=  0.05142  and  conclude  that  one  model  is  closer  to  the  truedistribution.
-```
-## Try adding more simulations
-
-Try summing them. Multiply average by 100.
-
-Some idea of variability if you compare individual sims to the sum of all 100.
-
-Reuben's rules for combining results from multiple estimated parameters. beta hat 1, beta hat 2.... beta hat 100.... we get beta hat = average of beta hats.
-
-variance of all is average of variances + (n+1) var of (beta hats)
-
-create our own plot which plots all of them with combined and some bounds and see what it looks like
-
-```{r}
-# rerun previous chunk with modified input by adding 1's
-data_3 = df_all_sim[1:69,3] + 1 #try with first three sims... doesn't work
-data_3 = data_3[order(-data_3)]
-
-# use to plug in
-model_pl = displ$new(data_2)
-model_ln = dislnorm$new(data_2)
-model_exp = disexp$new(data_2)
-model_pois = dispois$new(data_2)
+VGAM::vglm(as.character(0.95) ~ comp, yulesimon, data = data_comp, trace = TRUE)
+VGAM::vglm(as.character(samp_prop[i]) ~ comp, yulesimon, data = data_comp, trace = TRUE)
 
 ```
 
 
+## Yule-Simon Model for True Dist (Old Code)
 
-## Yule-Simon Model for True Dist
-
-**Previous work. can probably delete but for now leaving it:**
+revisit below code
 
 ```{r, echo=FALSE}
-# library(VGAM)
-# # true_dist_1
-# 
-# # yulesimon(link = "loge", irho = NULL, nsimEIM = 200, zero = NULL)
-# # https://www.rdocumentation.org/packages/VGAM/versions/0.9-7/topics/yulesimon
-# # drop 0's got error with them
-# true_temp = true_dist_1[c(1,2,3,4,5,6,7,8,9, 11, 12, 14, 20, 23),]
-# # by hand - will need to do by loop
-# df_true = as.data.frame(matrix(nrow=sum(true_temp$x), ncol=1))
-# df_true[1:659,1]=1
-# df_true[(659+1):(659+102),1]=2
-# df_true[(761+1):(761+24),1]=3
-# df_true[(785+1):(785+15),1]=4
-# df_true[(800+1):(800+9),1]=5
-# df_true[(809+1):(809+4),1]=6
-# df_true[(813+1):(813+3),1]=7
-# df_true[(816+1):(816+3),1]=8
-# df_true[(819+1):(819+4),1]=9
-# df_true[(823+1):(823+1),1]=11
-# df_true[(824+1):(824+2),1]=12
-# df_true[(826+1):(826+1),1]=14
-# df_true[(827+1):(827+1),1]=20
-# df_true[(828+1):(828+1),1]=23
-# 
-# # for (row in 1:23){
-# #   df_true[] = true_temp[row]
-# # }
-# 
-# model <- vglm(x ~ X, yulesimon, data = true_temp, trace = TRUE)
-# # coef(model, matrix = TRUE)
-# summary(model)
-# 
-# # https://www.rdocumentation.org/packages/VGAM/versions/0.8-3/topics/predict.vglm
-# true_temp$predict = predict(model, newdata=true_temp$x, type="response") # lol results make no sense 
-# #maybe predicting on link scale
-# 
+library(VGAM)
+
+# yulesimon(link = "loge", irho = NULL, nsimEIM = 200, zero = NULL)
+# https://www.rdocumentation.org/packages/VGAM/versions/0.9-7/topics/yulesimon
+# drop 0's got error with them -- probably will want to add 1's to all
+true_temp = true_dist_1[c(1,2,3,4,5,6,7,8,9, 11, 12, 14, 20, 23),]
+# by hand - will need to do by loop
+df_true = as.data.frame(matrix(nrow=sum(true_temp$x), ncol=1))
+df_true[1:659,1]=1
+df_true[(659+1):(659+102),1]=2
+df_true[(761+1):(761+24),1]=3
+df_true[(785+1):(785+15),1]=4
+df_true[(800+1):(800+9),1]=5
+df_true[(809+1):(809+4),1]=6
+df_true[(813+1):(813+3),1]=7
+df_true[(816+1):(816+3),1]=8
+df_true[(819+1):(819+4),1]=9
+df_true[(823+1):(823+1),1]=11
+df_true[(824+1):(824+2),1]=12
+df_true[(826+1):(826+1),1]=14
+df_true[(827+1):(827+1),1]=20
+df_true[(828+1):(828+1),1]=23
+
+model <- vglm(x ~ X, yulesimon, data = true_temp, trace = TRUE)
+# coef(model, matrix = TRUE)
+summary(model)
+
+# https://www.rdocumentation.org/packages/VGAM/versions/0.8-3/topics/predict.vglm
+true_temp$predict = predict(model, newdata=true_temp$x, type="response") # lol results make no sense
+#maybe predicting on link scale
 
 ```
-
-
 
 **Notes from group meeting on May 21, 2021**: 
 
 tfidf - zipfl law freq vs rank... common for text analytics
--add 1 to everything... he has seen it done for tfidf
--there are variations on that
--just add 1
--expecting counts
--might extend tail even longer if we multiply
-
--share with phil and nicole
 
 -like an indicator __species
 -idf is inverse document relative freqncies (idf) -- usually cast as natual log of the ratio of # of docs in corpus / num of docs that contain the term... but if nothing then it contains a 0 ... so ppl will replace with a 1... but th way he teaches it ... polyamorous - a very common term that appears many times in many docs, and the upper extreme is going to be bounded by the ln(idf), and that term would be an indicator term or monogamous (very special and a characteristic signature for that corpus)...
-
 
 - does it maintain dist, do params change, etc as sample rate changes
 - in survival analysis - exp, weibull ,ln, etc... typical sop is likelihood ratio to compare pairs & proc life reg for gof of each model
@@ -407,42 +184,8 @@ prob/proc __ metric -- to see what fit is like... generates a prob-prob or quant
 - do we care about drop off of 1's
 - diff sim's
 
-- one or two page exec summary - Phil is interested
-- include that as a question -- send paper about missing data on linkage rates from Nicole
-- make plan to meet Phil, Nicole & I
-
-
-
 **old notes can probably delete but I'm a hoarder**:
 
-not sure if this is releva
--sizes of each cluster is y, intercept only... estimate yule-simon... not assuming it varies with covariate... or could pile together and have sampling rate as x value (but would need to understand model better because knowing that's useful)
--use predict to see (and find any diagnostic plots for vglm - see if there's patterns, etc - check package doc, software paper).. power law might not be accurate depending how end trails off
--vglm help file to help for that (or the package file)
 -give understanding of yule-simon family next meeting (what is a vglm, etc) & how it relates to glm/what i've seen already
 
-
-- what is this error that geom_smooth removed non-finite values
-- model_lm = glm(abs(jitter(value))~X,family=Gamma(link="log"), data=df) <-- did not converge?
-- model_true = glm(abs(jitter(x))~X,family=Gamma(link="log"), data=true_dist_1)
- <- also did not converge
- - Note there are lots of warnings but I hid them
- 
- - log scale on y axis (prob most of change is in tails which is currently hard to see )
- - exponential (decay maybe overspursed) - do we see consistent across sampling rates (how parameters change)... if a glm isn't converging can increase the # of iterations that it runs (could need more time)
-- include a random effect
-- *Note: Each simulation within one proportion has its own random effect.*
-- what is the model form we want (quasipoisson, vs glmer with random effect b/c correlated between sims), sledgehammer - if it were exponential what would the rate param be... try a few diff ones (can get form for mle - if this were gamma (for alpha beta what would it be) - if I plot over my data... 
--for component dist ppl often use power law distribution yule-simon dist (how to estimate params for this - or write optimizer) -- if none of the standard ones handle it well it's one of the few that follows this log-log (versus just the log in the others we're looking at)... how does shape change with log y only, how does shape change with log y and log x
-
-- is there a poisson for size and number of times that size occurred - doesn't look like we can do for glm
-- what we can do to expand (637 becomes 637 rows with 1, X1, 1)... ex: some function will do that (maybe "expand") (b/c we want each draw to be one cluster - what size is it)
-- then fit with just intercept term... x is a function of 1 + (1|variable)... single poisson with extra variability from diff simulations ... 
-- if this doesn't work can try the Yule-Simon (see if there's an implementation in R) 
-
 - big question after will be how to move parameters in this situation into bigger epidemic model
-
-- random websites:
-- https://stats.stackexchange.com/questions/153611/interpreting-random-effect-%20variance-in-glmer
-- https://en.wikipedia.org/wiki/Yule%E2%80%93Simon_distribution
-- https://stackoverflow.com/questions/8936099/returning-multiple-objects-in-an-r-function alternatives to using the dollar sign to call model objects (for inside function)
