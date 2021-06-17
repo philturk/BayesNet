@@ -84,7 +84,6 @@ head(fitted(model))
 ## Random Code for Reference
 
 ```{r}
-data_dd
 # random example to try from cran notes for VGAM
 dyules(1:20, 2.1)
 ryules(20, 2.1)

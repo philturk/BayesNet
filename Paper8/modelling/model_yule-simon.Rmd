@@ -14,6 +14,7 @@ library(rstanarm)
 library(boot)
 library(poweRlaw) #compare dists
 library(GLDEX) #remove zeros
+library(VGAM)
 # load data
 # load objects created in "sampling_sim.R"
 sim_dist_100 = read.csv("C://Code//msu//gra//BayesNet//Paper8//sim_dists.csv")
@@ -42,6 +43,7 @@ melt_all_props = function(data = sim_dist_100){
   return(df_all_sim)
 }
 
+
 # melt dataframe with all proportions and simulations into one master df_all_sim
 df_all_sim = melt_all_props(data = sim_dist_100)
 
@@ -56,49 +58,25 @@ data_2 = data_2[order(-data_2)] #wait why are we ordering this?
 
 ## Overview of work in this File
 
-While discussing results from running comparisons with the poweRlaw package between four distributions (power law, log normal, exponential and poisson) we found that power law and log normal both fit different parts of the curve better and exponential and poisson have a poor fit. We want to see if adding another degree of freedom will allow the fit of the curve to be better and want to explore the option of Yule-Simon. 
+While discussing results from running comparisons with the poweRlaw package between four distributions (power law, log normal, exponential and poisson) we found that power law and log normal both fit different parts of the curve better and exponential and poisson have a poor fit. In this file we want to compare power law (PL) and lognormal (LN) to yule-simon (YS) using the VGAM package. We also want to look into a potential implementation of YS with two parameters. 
 
-<!-- two params - combine models? -->
-<!-- ex Yule Simon (extra degree of freedom might be enough to capture) -->
-<!-- can we add the extra data... add simulations -->
-<!-- how to add simulations?... try to do it just add them as extra points -->
+Outstanding: 
+- after solving above issues with weird predictions include all the simulations not just one
+- look into another implementation of YS (two params?)
+- why is YS model not working for degree distribution (see other Rmd file)?
 
-## Yule-Simon Model for Component Distribution
+## Build Models and Pull Important Data
 
-```{r, echo=FALSE}
-library(VGAM)
-data = data.frame(comp = 1:23, count = data_2)
-# from "yulesimon" example in cran docs:
-model = VGAM::vglm(count ~ comp, yulesimon, data = data, trace = TRUE)
-# https://www.rdocumentation.org/packages/VGAM/versions/0.9-0/topics/yulesimon
-coef(model, matrix = TRUE)
-summary(model)
-VGAM::plotvglm(model)
-head(fitted(model)) #why are these all NAs?
-
-
-# https://www.rdocumentation.org/packages/VGAM/versions/0.8-3/topics/predict.vglm
-data$predict = predict(model, newdata=data$count, type="response")
-
-
-# easier to see on actual vs predicted curve -- create that
-# are they unstandardized pearson residuals (in image), so will depend on link function
-# it might be an improvement because residuals on either side
-# looks promising
-# because no scale of how on/off it is (compare to others)
-
-# everything suggests just rho so not sure what two parameters do to it?
-```
-
-## Build Model in Loop - WIP
+Questions:
+- why are we getting NAs from the predictvglm function? (and why are they decreasing as sampling proportion decreases)
+- why are we getting NaNs from the predict LN function (with prop 80 and lower)
 
 ```{r}
-
-data_2 = df_all_sim[1:23,3] + 1
-data_2 = data_2[order(-data_2)]
-data = data.frame(comp = 1:23, count = data_2)
-
-df_all_sim
+# data_2 = df_all_sim[1:23,3] + 1
+# data_2 = data_2[order(-data_2)]
+# data = data.frame(comp = 1:23, count = data_2)
+## ---shorter version without creating extra df object
+# data = data.frame(comp = 1:23, count = data_2[order(-df_all_sim[1:23,3] + 1)])
 
 # --- get first simulation from each proportion to build model with
 data_comp = data.frame(comp=1:23)
@@ -107,71 +85,149 @@ end_sim_line = seq(from = 23, to = 36800, by = 2300)
 samp_prop = seq(from = .95, to = 0.2, by = -0.05)
 samp_prop_names = c("ninefive", "nine", "eightfive", "eight", "sevenfive", "seven", "sixfive", "six", "fivefive", "five", "fourfive", "four", "threefive", "three", "twofive", "two")
 
-# can start out by just calling and storing certain things about the model
-# store diagnostic plots etc
-
 for (i in 1:16){
   # library(reshape2)
   beg = beg_sim_line[i]
   end = end_sim_line[i]
   data_comp[as.character(samp_prop_names[i])] = df_all_sim[beg:end,3] + 1
 }
+
 # --- run model on first simulation from each proportion
-models_comp <- list()
-# i=1
+# --- store information from each model run (prediction responses and summaries)
+model_summaries = list()
+plot_comparisons = c()
+plot_comparisons_loglog = c()
+compare_ln_pl = list()
+gof_pl = list()
+gof_ln = list()
+
+# note to self add ys to column name
 for (i in 1:16) {
-  models_comp[as.character(samp_prop_names[i])]<-  
-    # lm(y ~., data.frame(poly(x, i)))
-    #     print(summary(mod[[i]]))
+  # outputs are:
+  # data_comp (dataframe): 16*3 new columns with preds from YS, PL, LN for all props
+  # model_summaries (list): 16 model summaries from YS for all props
+  # model_intercepts_ys
+  # model_slopes_ys
+  # gof_pl, gof_ln (lists): 16 values for gof of PL and LN models for all props
+  # compare_ln_pl (list): test_statistic, one_sided_p_val, two_sided_p_val for comparing LN and PL model (iff x_min is the same, o/w == 0)
+  
+  
+  # loop through column names corresponding to sampling proportions
+  col = samp_prop_names[i]
+  
+  # build model on i'th column of data
+  model = VGAM::vglm(data_comp[[as.character(col)]] ~ data_comp$comp, 
+                     yulesimon, data = data_comp, trace = TRUE)
+  
+  # store predicted values -- why do we have NAs? is this something like the xmin thing for powerlaw?
+  data_comp[[paste0("response_", as.character(col), "_ys")]] = predictvglm(model, type="response")
+  
+  # store summary -- seems to be working as desired
+  model_summaries[[i]] = summary(model)
+  model_intercepts_ys[[i]] = coef(model)[1]
+  model_slopes_ys[[i]] = coef(model)[2]
+
+  
+  # create PL and LN models and store predictions in df
+  model_pl = displ$new(data_comp[[as.character(col)]])
+  est_xmin_pl = estimate_xmin(model_pl)
+  model_pl$setXmin(est_xmin_pl$xmin)
+  model_pl$setPars(est_xmin_pl$pars)
+  gof_pl[i] = est_xmin_pl$gof
+  data_comp[[paste0("response_", as.character(col), "_pl")]] = dpldis(data_comp$comp, xmin=est_xmin_pl$xmin, alpha=est_xmin_pl$pars)
+  
+  model_ln = dislnorm$new(data_comp[[as.character(col)]])
+  est_xmin_ln = estimate_xmin(model_ln)
+  model_ln$setXmin(est_xmin_ln$xmin)
+  model_ln$setPars(est_xmin_ln$pars)
+  gof_ln[i] = est_xmin_ln$gof
+  data_comp[[paste0("response_", as.character(col), "_ln")]] = dpldis(data_comp$comp, xmin=est_xmin_ln$xmin, alpha=est_xmin_ln$pars)
+
+  # store comparison of ln and pl -- works to store list after changing [] to [[]]
+  if (est_xmin_pl$xmin==est_xmin_ln$xmin){
+      compare_ln_pl[[i]] = c(compare_distributions(model_pl, model_ln)[1], compare_distributions(model_pl, model_ln)[2], compare_distributions(model_pl, model_ln)[3])
+  } else {compare_ln_pl[[i]] = 0}
+}
+```
+
+## Create Visuals With Predicted Values and GOF Values - WIP
+
+### Visuals for Predicted Values
+
+Questions:
+- The gof values for the lognormal models are much higher than for power law, however the visuals (for log-log) clearly show that power law (red) is much closer to the values used to build the model (blue).
+- Why are the YS predicted values only at the tail? is there a built in x-min?
+
+Note: The yellow is difficult to see but when other colors (black, pink) were attempted it was very difficult to see any of the other values
+
+```{r}
+# --------------- PLOT PREDS FOR ALL PROPORTIONS
+plot_comparisons = function(df, col){
+  # input - df with columns with simulated values and predicted values for yule-simon, powerlaw and lognormal
+  # output - a ggplot object graphing all 4 values on one visual
+  visual = ggplot() +
+    geom_point(aes(x = comp, y = df[[as.character(col)]]), color="blue", data = df) +
+    geom_point(aes(x = comp, y = df[[paste0("response_", as.character(col), "_ys")]]), color="green", data = df, alpha=.5) +
+    geom_point(aes(x = comp, y = df[[paste0("response_", as.character(col), "_pl")]]),color="red", data = df, alpha = .5) +
+    geom_point(aes(x = comp, y = df[[paste0("response_", as.character(col), "_ln")]]),color="yellow", data = df, alpha = .5) +
+    xlab("Comp") +
+    ylab("Frequency") +
+    labs(title = paste("Actual Comp Dist (blue) for proportion", as.character(col), "\n vs Pred Yule-Simon (green) vs Pred PL (red) vs Pred LN (yellow) \n Some rows of Predicted Omitted (unsure why)"))
+  return(visual)
 }
 
-VGAM::vglm(as.character(0.95) ~ comp, yulesimon, data = data_comp, trace = TRUE)
-VGAM::vglm(as.character(samp_prop[i]) ~ comp, yulesimon, data = data_comp, trace = TRUE)
+# --------------- LOG-LOG PLOT PREDS FOR ALL PROPORTIONS
+plot_comparisons_loglog = function(df, col){
+  # input - df with columns with simulated values and predicted values for yule-simon, powerlaw and lognormal
+  # output - a log-log ggplot object graphing all 4 values on one visual
+    visual = ggplot() +
+    geom_point(aes(x = log(comp), y = log(data_comp[[as.character(col)]])), color="blue", data = data_comp) +
+    geom_point(aes(x = log(comp), y = log(data_comp[[paste0("response_", as.character(col), "_ys")]])), color="green", data = data_comp, alpha=.5) +
+    geom_point(aes(x = log(comp), y = log(data_comp[[paste0("response_", as.character(col), "_pl")]])),color="red", data = data_comp, alpha = .5) +
+    geom_point(aes(x = log(comp), y = log(data_comp[[paste0("response_", as.character(col), "_ln")]])),color="yellow", data = data_comp, alpha = .5) +
+    xlab("Comp") +
+    ylab("Frequency") +
+    labs(title = paste("Loglog of Actual Comp Dist (blue) for proportion", as.character(col), "\n vs Pred Yule-Simon (green) vs Pred PL (red) vs Pred LN (yellow) \n Some rows of Predicted Omitted (unsure why)"))
+  return(visual)
+}
+
+# create list of ggplot objects with visuals showing predictions for all 16 proportions for simulated data and each of the 3 models
+plots = lapply(samp_prop_names, plot_comparisons, df=data_comp)
+loglog_plots = lapply(samp_prop_names, plot_comparisons_loglog, df=data_comp)
+
+print(plots)
+print(loglog_plots)
+```
+### Visuals for GOF for Different Models
+
+To Do:
+- add gof for YS that is comparable to these below values
+
+```{r}
+
 
 ```
 
+### Visuals for Parameters in Model
 
-## Yule-Simon Model for True Dist (Old Code)
+Note to self: seems to be estimating two parameters
 
-revisit below code
+```{r}
+# will use model_summaries
+model_summaries[[1]]
 
-```{r, echo=FALSE}
-library(VGAM)
-
-# yulesimon(link = "loge", irho = NULL, nsimEIM = 200, zero = NULL)
-# https://www.rdocumentation.org/packages/VGAM/versions/0.9-7/topics/yulesimon
-# drop 0's got error with them -- probably will want to add 1's to all
-true_temp = true_dist_1[c(1,2,3,4,5,6,7,8,9, 11, 12, 14, 20, 23),]
-# by hand - will need to do by loop
-df_true = as.data.frame(matrix(nrow=sum(true_temp$x), ncol=1))
-df_true[1:659,1]=1
-df_true[(659+1):(659+102),1]=2
-df_true[(761+1):(761+24),1]=3
-df_true[(785+1):(785+15),1]=4
-df_true[(800+1):(800+9),1]=5
-df_true[(809+1):(809+4),1]=6
-df_true[(813+1):(813+3),1]=7
-df_true[(816+1):(816+3),1]=8
-df_true[(819+1):(819+4),1]=9
-df_true[(823+1):(823+1),1]=11
-df_true[(824+1):(824+2),1]=12
-df_true[(826+1):(826+1),1]=14
-df_true[(827+1):(827+1),1]=20
-df_true[(828+1):(828+1),1]=23
-
-model <- vglm(x ~ X, yulesimon, data = true_temp, trace = TRUE)
-# coef(model, matrix = TRUE)
-summary(model)
-
-# https://www.rdocumentation.org/packages/VGAM/versions/0.8-3/topics/predict.vglm
-true_temp$predict = predict(model, newdata=true_temp$x, type="response") # lol results make no sense
-#maybe predicting on link scale
-
+# start with intercept and slope
+# add std error or make a p-value one
 ```
+
+## Other Notes 
+
+- We can use *VGAM::plotvglm(model)* to create plots with pearson residuals but the link scale makes it's hard to interpret.
+- In the above we're using *predictvglm(model, type="response")* which returns estimates on the level of the outcome, however there are alternative "types" (*predictvglm(model, type="link")* which returns estimates on the scale of the link function and *predictvglm(model, type="terms")* which is rarely used).
 
 **Notes from group meeting on May 21, 2021**: 
 
-tfidf - zipfl law freq vs rank... common for text analytics
+zipf law freq vs rank... common for text analytics
 
 -like an indicator __species
 -idf is inverse document relative freqncies (idf) -- usually cast as natual log of the ratio of # of docs in corpus / num of docs that contain the term... but if nothing then it contains a 0 ... so ppl will replace with a 1... but th way he teaches it ... polyamorous - a very common term that appears many times in many docs, and the upper extreme is going to be bounded by the ln(idf), and that term would be an indicator term or monogamous (very special and a characteristic signature for that corpus)...
@@ -189,3 +245,7 @@ prob/proc __ metric -- to see what fit is like... generates a prob-prob or quant
 -give understanding of yule-simon family next meeting (what is a vglm, etc) & how it relates to glm/what i've seen already
 
 - big question after will be how to move parameters in this situation into bigger epidemic model
+
+### Websites:
+- *Useful for differentiating "link", "response" and "terms" in the predict function of the vglm* https://www.datascienceblog.net/post/machine-learning/interpreting_generalized_linear_models/
+- *Explains why ggplot doesn't work in loop* https://stackoverflow.com/questions/31993704/storing-ggplot-objects-in-a-list-from-within-loop-in-r
