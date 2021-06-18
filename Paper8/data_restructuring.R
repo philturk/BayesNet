@@ -102,6 +102,7 @@ df_35 = combine_all_sim(dataframe = df_all_sim[start_row[13]:end_row[13],])
 df_3 = combine_all_sim(dataframe = df_all_sim[start_row[14]:end_row[14],]) 
 df_25 = combine_all_sim(dataframe = df_all_sim[start_row[15]:end_row[15],])
 df_2 = combine_all_sim(dataframe = df_all_sim[start_row[16]:end_row[16],])
+df_only_95 = df_all_sim[start_row[1]:end_row[1],]
 
 # save each df into a separate csv
 write.csv(df_95,"C://Code//msu//gra//BayesNet//Paper8//proportions//prop95.csv", row.names = FALSE)
@@ -120,6 +121,8 @@ write.csv(df_35,"C://Code//msu//gra//BayesNet//Paper8//proportions//prop35.csv",
 write.csv(df_3,"C://Code//msu//gra//BayesNet//Paper8//proportions//prop30.csv", row.names = FALSE)
 write.csv(df_25,"C://Code//msu//gra//BayesNet//Paper8//proportions//prop25.csv", row.names = FALSE)
 write.csv(df_2,"C://Code//msu//gra//BayesNet//Paper8//proportions//prop20.csv", row.names = FALSE)
+write.csv(df_all_sim,"C://Code//msu//gra//BayesNet//Paper8//proportions//df_all_sim.csv", row.names = FALSE)
+write.csv(df_only_95,"C://Code//msu//gra//BayesNet//Paper8//proportions//df_only_95.csv", row.names = FALSE)
 
 
 # # --- check
