@@ -29,7 +29,8 @@ Inital_bayes_inf <- function(population,Network_stats, Prob_Distr, Prob_Distr_Pa
   
   U_P_Start = as.undirected(P_start, mode = "collapse")
   V(U_P_Start)$name <- as.character(c(0:(population-1)))
-  G_start = igraph::union(G_start2, U_P_Start)
-
+  #G_start = igraph::union(G_start2, U_P_Start)
+  G_start = U_P_Start
+  
   return(list(G_start, P_start))
 }

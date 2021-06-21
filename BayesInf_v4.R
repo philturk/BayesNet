@@ -141,7 +141,7 @@ abline(h=mean(ProbDistr_stats.df[,3]), col = 'green')
 
 library('ggplot2')
 
-net_results.df = data.frame(mean_val = c(apply(G_stats.df, 2, mean), apply(ProbDistr_stats.df, 2, mean)),
+net_results.df = data.frame(mean_val = c(apply(G_stats.df[-c(1:800),], 2, mean), apply(ProbDistr_stats.df, 2, mean)),
            var_val = c(apply(G_stats.df, 2, var), apply(ProbDistr_stats.df, 2, var)),
            stat_type = c(rep("Posterior", 3), rep("Prior", 3)),
            net_prop = rep(c("00", "01", "11"), 2),
@@ -161,6 +161,8 @@ ggplot(net_results.df, aes(x=net_prop, y=bias2_val, fill = stat_type)) +
 ggplot(net_results.df, aes(x=net_prop, y=mse_val, fill = stat_type)) + 
   geom_bar(stat = "identity", position=position_dodge())
 
+net_results.df %>% filter(stat_type == "Prior") %>% pull(mse_val) %>% sum()
+net_results.df %>% filter(stat_type == "Posterior") %>% pull(mse_val) %>% sum()
 
 #################################
 
@@ -184,10 +186,10 @@ for (i in c(1:9)) {
   abline(h=mean(ProbDistr_stats.df[,i]), col = 'green')
 }
 
-net_results_full.df = data.frame(mean_val = c(apply(G_stats.df, 2, mean), apply(ProbDistr_stats.df, 2, mean)),
+net_results_full.df = data.frame(mean_val = c(apply(G_stats.df[c(801:1000),], 2, mean), apply(ProbDistr_stats.df, 2, mean)),
                             var_val = c(apply(G_stats.df, 2, var), apply(ProbDistr_stats.df, 2, var)),
                             stat_type = c(rep("Posterior", population), rep("Prior", population)),
-                            net_prop = rep(paste("Degree", c(0:99), sep="_"), 2),
+                            net_prop = rep(paste("Degree", c(0:(population-1)), sep="_"), 2),
                             truth = rep(as.numeric(G_stats_truth), 2)
 ) %>% mutate(bias2_val = (mean_val - truth)^2) %>%
   mutate(mse_val = bias2_val + var_val)
@@ -205,6 +207,12 @@ ggplot(net_results.df, aes(x=net_prop, y=bias2_val, fill = stat_type)) +
 
 ggplot(net_results.df, aes(x=net_prop, y=mse_val, fill = stat_type)) + 
   geom_bar(stat = "identity", position=position_dodge())
+
+net_results_full.df %>% filter(stat_type == "Prior") %>% pull(mse_val) %>% sum()
+net_results_full.df %>% filter(stat_type == "Posterior") %>% pull(mse_val) %>% sum()
+
+net_results.df %>% filter(stat_type == "Prior") %>% pull(mse_val) %>% sum()
+net_results.df %>% filter(stat_type == "Posterior") %>% pull(mse_val) %>% sum()
 
 
 ##################################

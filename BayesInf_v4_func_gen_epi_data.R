@@ -48,6 +48,7 @@ generate_epidemic_data <- function(beta_a = 1/5,
     
     if (igraph::ecount(P) > 5) {
       invalid_epidemic = FALSE
+      print("No Epidemic: restarting...")
     }
     
     counter = counter + 1
@@ -155,8 +156,13 @@ SIIR.simulator <- function(g, population, beta_a, beta_l, gamma_a, gamma_l, num_
     Node_neighbors = which(g[Node_id,]==1)
     if (length(Node_neighbors) > 0) {
       for (poss_infect in Node_neighbors) {
-        acute_time = rexp(1, beta_a) #time of infectious contact during acute
-        if ( ((acute_time + Ia[Node_id]) < Il[Node_id])  && ((acute_time + Ia[Node_id]) < Ia[poss_infect]) )  { #still in acute phase
+        if (beta_a > 0) {
+          acute_time = rexp(1, beta_a) #time of infectious contact during acute
+          acute_phase_bool = ((acute_time + Ia[Node_id]) < Il[Node_id])  && ((acute_time + Ia[Node_id]) < Ia[poss_infect])
+        } else {
+          acute_phase_bool = FALSE
+        }
+        if (acute_phase_bool)  { #still in acute phase
           Ia[poss_infect] = acute_time + Ia[Node_id]
           Il[poss_infect] = rexp(1, gamma_a) + Ia[poss_infect]
           R[poss_infect] = Il[poss_infect] + rexp(1, gamma_l)
