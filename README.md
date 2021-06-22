@@ -9,10 +9,10 @@
 
 ## BayesInf_v4_func_read_params.R 
       - Contains all of the specificians for the simulations.
-      - States type of network property of interesting (e.g., mixing, degree distribution)
+      - States type of network property of interest (e.g., mixing, degree distribution)
       
 ## BayesInf_v4_func_gen_epi_data.R 
-      - Generates the ground truth
+      - Generates the ground truth 
       - Generates simulated datasets (genetic, behavioral survey, clinical data)
       
 ## BayesInf_v4_func_gen_genetic_data.R
