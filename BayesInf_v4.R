@@ -81,7 +81,7 @@ for (mcmc_counter in c(1:n_mcmc_trials)) {
   Prob_Distr_Params = Update_Prob_Distr_Params(G,Prob_Distr_Params_hyperprior=Prob_Distr_Params_hyperprior, Network_stats = Network_stats, Prob_Distr = Prob_Distr, Prob_Distr_Params = Prob_Distr_Params, G_stats = G_stats)
   
   #ecount_G = c(ecount_G, igraph::ecount(G))
-  ecount_P = c(ecount_P, igraph::ecount(P))
+  #ecount_P = c(ecount_P, igraph::ecount(P))
   
   #P_a[[mcmc_counter]] = P
   #G_a[[mcmc_counter]] = G
