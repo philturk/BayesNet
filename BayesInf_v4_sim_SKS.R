@@ -90,33 +90,41 @@ Prob_Distr_Params = Initial_Data[[8]]
 
 ####################Bayesian Inference####################
 
-Init_nets = Inital_bayes_inf(population,Network_stats, 
-                             Prob_Distr, Prob_Distr_Params,covPattern,
-                             Ia,Il,R,beta_a,beta_l,gamma_a,gamma_l, T_dist)
-
-G = Init_nets[[1]] #G_truth #
-P = Init_nets[[2]] #P_truth #
-
-P_a = NULL
-G_a = NULL
-
-G_stats.df = c()
-ecount_P = c()
-
-for (mcmc_counter in c(1:n_mcmc_trials)) {
+if (!is.null(P_truth)) {
+  Init_nets = Inital_bayes_inf(population,Network_stats, 
+                               Prob_Distr, Prob_Distr_Params,covPattern,
+                               Ia,Il,R,beta_a,beta_l,gamma_a,gamma_l, T_dist)
   
-  G_info = Update_G(G,P,Ia,Il,R,beta_a,beta_l,Prob_Distr_Params=Prob_Distr_Params, Network_stats = Network_stats, Prob_Distr = Prob_Distr, covPattern = covPattern)
-  G = G_info[[1]]
-  G_stats = as.numeric(G_info[[2]])
+  G = Init_nets[[1]] #G_truth #
+  P = Init_nets[[2]] #P_truth #
   
-  G_stats.df = rbind(G_stats.df, G_stats)
+  P_a = NULL
+  G_a = NULL
   
-  P = Update_P(G,Ia,Il,R,beta_a,beta_l,gamma_a,gamma_l, T_dist)
+  G_stats.df = c()
+  ecount_P = c()
   
-  Prob_Distr_Params = Update_Prob_Distr_Params(G,Prob_Distr_Params_hyperprior=Prob_Distr_Params_hyperprior, Network_stats = Network_stats, Prob_Distr = Prob_Distr, Prob_Distr_Params = Prob_Distr_Params, G_stats = G_stats)
-  
-  print(mcmc_counter)
-  
+  for (mcmc_counter in c(1:n_mcmc_trials)) {
+    
+    G_info = Update_G(G,P,Ia,Il,R,beta_a,beta_l,Prob_Distr_Params=Prob_Distr_Params, Network_stats = Network_stats, Prob_Distr = Prob_Distr, covPattern = covPattern)
+    G = G_info[[1]]
+    G_stats = as.numeric(G_info[[2]])
+    
+    G_stats.df = rbind(G_stats.df, G_stats)
+    
+    P = Update_P(G,Ia,Il,R,beta_a,beta_l,gamma_a,gamma_l, T_dist)
+    
+    Prob_Distr_Params = Update_Prob_Distr_Params(G,Prob_Distr_Params_hyperprior=Prob_Distr_Params_hyperprior, Network_stats = Network_stats, Prob_Distr = Prob_Distr, Prob_Distr_Params = Prob_Distr_Params, G_stats = G_stats)
+    
+    print(mcmc_counter)
+    
+  }
+} else {
+  G_stats.df = NULL
+  Prob_Distr_Params = NULL
+  Prob_Distr_Params_hyperprior = NULL
+  n_mcmc_trials = NULL
+  G_stats_truth = NULL
 }
 
 ####################Save Results####################

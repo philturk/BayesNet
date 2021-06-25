@@ -92,6 +92,16 @@ for (mcmc_counter in c(1:n_mcmc_trials)) {
 
 ####################
 
+#load("C:/Users/ravij/OneDrive/Desktop/Network Research/network inference/NetBayes_git/NetBayes_git/SimResults/simulation-001.rda")
+
+#G_stats.df = output[[3]][[1]]
+#Prob_Distr_Params = output[[3]][[2]]
+#Prob_Distr_Params_hyperprior = output[[3]][[3]]
+#n_mcmc_trials = output[[3]][[4]]
+#G_stats_truth = output[[3]][[5]]
+
+####################
+
 ProbDistr_stats.df = c()
 
 for (p_counter in c(1:n_mcmc_trials)) {

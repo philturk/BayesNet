@@ -85,6 +85,7 @@ results_list = list(G_stats.df,
                     Prob_Distr_Params,
                     Prob_Distr_Params_hyperprior,
                     n_mcmc_trials,
-                    G_stats_truth
+                    G_stats_truth,
+                    init_seed
                     )
 
