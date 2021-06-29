@@ -1,0 +1,163 @@
+---
+title: "visualize_sim_dist"
+author: "Gabrielle Lemire"
+date: "3/12/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+file_location = dirname(rstudioapi::getActiveDocumentContext()$path)
+```
+
+# Component Distribution for Simulated Genetic Networks
+
+## 1 Unstandardized Visuals for Simulated Genetic Networks
+
+Not divided by total number of nodes
+
+```{r, warning=FALSE, echo=FALSE, message=FALSE, results=FALSE}
+library(ggplot2)
+library(rlist)
+library(reshape2)
+library(rstanarm)
+library(boot)
+
+sim_dist_100 = read.csv(paste0(file_location, "//sim_dists-comp_dist.csv"))
+true_dist_1 = read.csv(paste0(file_location, "//true_dist-comp_dist.csv"))
+samp_prop = seq(from = .95, to = 0.2, by = -0.05)
+ymax = max(sim_dist_100, true_dist_1)+5
+
+
+# -------- true dist model
+true_dist = ggplot(true_dist_1, aes(x=jitter(X), y=jitter(x))) +
+    geom_point(colour="red") +
+    geom_smooth(method="loess", span=.1) +
+    ylim(0, ymax) +
+    xlab("Cluster Size") +
+    ylab("Number of Clusters ") +
+    labs(title = "Component Distribution for True Distribution")
+print(true_dist)
+
+for (i in c(1:16)){ #from 1 to 16
+# for (i in seq(from=1, to=346, by=23)){ #seq, also works but need to change prop line
+    df = as.data.frame(sim_dist_100[(i+((i-1)*22)):(i*23),]) #from 1 to 16
+  # df = as.data.frame(sim_dist_100[i:(i+22),]) #seq, also works but need to change prop line
+  df$X = c(1:23)
+  df = melt(df, id.vars="X")
+  prop = samp_prop[i]
+
+  plot = ggplot(df, aes(x=X, y=value)) +
+    geom_point() +
+    geom_smooth(method="loess", span=.1) +
+    geom_point(data=true_dist_1, aes(x=X, y=x), colour="red") +
+    ylim(0, ymax) +
+    xlab("Cluster Size") +
+    ylab("Number of Clusters (Ave across 100 Simulations)") +
+    labs(title = paste("Component Distribution for Proportion", as.character(prop), "\n True Distribution in Red"))
+  
+  print(plot)
+}
+```
+
+## 2 Standardized Visuals for Simulated Genetic Networks
+
+Standardize # clusters/# nodes
+
+```{r, warning=FALSE, echo=FALSE, message=FALSE, results=FALSE}
+tot = sum(true_dist_1$x)
+
+# -------- true dist model - standardized
+true_dist = ggplot(true_dist_1, aes(x=jitter(X), y=jitter(x)/sum(true_dist_1$x))) +
+    geom_point(colour="red") +
+    geom_smooth(method="loess", span=.1) +
+    # ylim(0, ymax) +
+    xlab("Cluster Size") +
+    ylab("Number of Clusters/Tot Number Nodes") +
+    labs(title = "Standardized Component Dist for True Dist")
+print(true_dist)
+
+
+for (i in c(1:16)){ 
+  df = as.data.frame(sim_dist_100[(i+((i-1)*22)):(i*23),])
+  df$X = c(1:23)
+  df = melt(df, id.vars="X")
+  prop = samp_prop[i]
+
+  plot = ggplot(df, aes(x=X, y=value/(prop*tot))) +
+    geom_point() +
+    geom_smooth(method="loess", span=.1) +
+    geom_point(data=true_dist_1, aes(x=X, y=x/tot), colour="red") +
+    ylim(0, 1) +
+    xlab("Cluster Size") +
+    ylab("Number of Clusters/Sum Nodes (Ave across 100 Simulations)") +
+    labs(title = paste("Standardized Component Distribution for Proportion", as.character(prop), "\n True Distribution in Red"))
+  
+  print(plot)
+}
+```
+
+# 3 Visualizing - Log vs Log-Log Scales
+
+Results - the true distribution looks linear(ish) on the log-log scale.
+What do we do with the 0's? leave them in? Will the skew our data downwards? Maybe not an issue for simulated data because there will be fewer 0's? are empties better though? Think about this..
+
+```{r, warning=FALSE, echo=FALSE, message=FALSE, results=FALSE}
+# -------- standard true dist model - log on y
+true_dist = ggplot(true_dist_1, aes(x=X, y=log(x/sum(true_dist_1$x)))) +
+    geom_point(colour="red") +
+    geom_smooth(method="loess", span=.5) +
+    # ylim(0, ymax) +
+    xlab("Cluster Size") +
+    ylab("Log(Number of Clusters/Tot Number Nodes)") +
+    labs(title = "Log of Standardized Component Dist for True Dist")
+print(true_dist)
+
+# -------- standard true dist model - log on y, log on x
+true_dist = ggplot(true_dist_1, aes(log(x=X), y=log(x/sum(true_dist_1$x)))) +
+    geom_point(colour="red") +
+    geom_smooth(method="loess", span=.5) +
+    # ylim(0, ymax) +
+    xlab("Log(Cluster Size)") +
+    ylab("Log(Number of Clusters/Tot Number Nodes)") +
+    labs(title = "Log-Log of Standardized Component Dist for True Dist")
+print(true_dist)
+
+# -------- standard log on y
+for (i in c(1:16)){ 
+  df = as.data.frame(sim_dist_100[(i+((i-1)*22)):(i*23),])
+  df$X = c(1:23)
+  df = melt(df, id.vars="X")
+  prop = samp_prop[i]
+
+  plot = ggplot(df, aes(x=X, y=log(value/(prop*tot)))) +
+    geom_point(colour="black") +
+    geom_smooth(method="loess", span=.5) +
+    geom_point(data=true_dist_1, aes(x=X, y=log(x/tot)), colour="red") +
+    # ylim(0, 1) +
+    xlab("Cluster Size") +
+    ylab("Log(Number of Clusters/Tot Number Nodes)") +
+    labs(title = paste("Log of Standardized Component Dist for", as.character(prop), "vs True Dist"))
+         
+  print(plot)
+}
+
+# -------- standard log on y
+for (i in c(1:16)){ 
+  df = as.data.frame(sim_dist_100[(i+((i-1)*22)):(i*23),])
+  df$X = c(1:23)
+  df = melt(df, id.vars="X")
+  prop = samp_prop[i]
+
+  plot = ggplot(df, aes(x=log(X), y=log(value/(prop*tot)))) +
+    geom_point(colour="black") +
+    geom_smooth(method="loess", span=.5) +
+    geom_point(data=true_dist_1, aes(x=log(X), y=log(x/tot)), colour="red") +
+    # ylim(0, 1) +
+    xlab("Log(Cluster Size)") +
+    ylab("Log(Number of Clusters/Tot Number Nodes)") +
+    labs(title = paste("Log-Log of Standardized Component Dist for", as.character(prop), "vs True Dist"))
+         
+  print(plot)
+}
+```
