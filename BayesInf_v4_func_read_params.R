@@ -39,3 +39,6 @@ genetic_bits = 1024
 
 #Bayes Inf MCMC
 n_mcmc_trials = 1000
+
+#Prior vs. MCMC weight
+MCMC_wgt = .2

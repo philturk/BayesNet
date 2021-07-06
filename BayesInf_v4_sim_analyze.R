@@ -66,11 +66,67 @@ for (i in c(1:length(results))) {
   
 }
 
-prior_250 = prior_mse %>% mean()
-post_250 = post_mse %>% mean()
+prior_250 = prior_mse %>% median()
+post_250 = post_mse %>% median()
 
 #plot(prior_mse, post_mse)
 
 prior_250
 post_250
 
+
+
+################################
+################################
+################################
+################################
+
+
+load("C:/Users/ravij/OneDrive/Desktop/Network Research/network inference/NetBayes_git/NetBayes_git/combined-results-n50-dd.rda")
+
+prior_mse = c()
+post_mse = c()
+
+population = 1000
+
+for (i in c(1:length(results))) {
+  
+  G_stats.df = results[[i]][[1]]
+  Prob_Distr_Params = results[[i]][[2]]
+  Prob_Distr_Params_hyperprior = results[[i]][[3]]
+  n_mcmc_trials = results[[i]][[4]]
+  G_stats_truth = results[[i]][[5]]
+  
+  ProbDistr_stats.df = c()
+  
+  for (p_counter in c(1:n_mcmc_trials)) {
+    x2 = as.numeric(gtools::rdirichlet(n = 1, alpha = Prob_Distr_Params_hyperprior[[3]]))
+    ProbDistr_stats.df = rbind(ProbDistr_stats.df, population*x2)
+  }
+  
+  
+  net_results_full.df = data.frame(mean_val = c(apply(G_stats.df[c(801:1000),], 2, mean), apply(ProbDistr_stats.df, 2, mean)),
+                                   var_val = c(apply(G_stats.df, 2, var), apply(ProbDistr_stats.df, 2, var)),
+                                   stat_type = c(rep("Posterior", population), rep("Prior", population)),
+                                   net_prop = rep(paste("Degree", c(0:(population-1)), sep="_"), 2),
+                                   truth = rep(as.numeric(G_stats_truth), 2)
+  ) %>% mutate(bias2_val = (mean_val - truth)^2) %>%
+    mutate(mse_val = bias2_val + var_val)
+  
+  net_results.df = net_results_full.df %>% filter(net_prop %in% paste("Degree", c(2:7), sep="_"))
+  
+  prior_mse = c(prior_mse, net_results.df %>% filter(stat_type == "Prior") %>% pull(mse_val) %>% sum())
+  post_mse = c(post_mse, net_results.df %>% filter(stat_type == "Posterior") %>% pull(mse_val) %>% sum())
+  
+  print(i)
+}
+
+post_mse %>% hist()
+
+prior_250 = prior_mse %>% mean()
+post_250 = post_mse[which(post_mse < prior_250*5)] %>% mean()
+
+plot(prior_mse, post_mse)
+
+prior_250
+post_250

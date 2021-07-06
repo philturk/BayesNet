@@ -235,7 +235,7 @@ Update_Prob_Distr_Params <- function(g, Prob_Distr_Params_hyperprior, Network_st
         gamma_kappa_update = gamma_kappa + g_edgecount
         gamma_theta_update =  gamma_theta/(1*gamma_theta + 1)
         
-        alpha_update = alpha + G_stats
+        alpha_update = alpha + (G_stats * MCMC_wgt)
 
         Prob_Distr_Params[[1]][1] = rgamma(1, shape = gamma_kappa_update, scale = gamma_theta_update)
         Prob_Distr_Params[[2]] = as.numeric(gtools::rdirichlet(n = 1, alpha = alpha_update))
@@ -250,7 +250,7 @@ Update_Prob_Distr_Params <- function(g, Prob_Distr_Params_hyperprior, Network_st
         alpha = Prob_Distr_Params_hyperprior[[3]]
         
         v_deg =igraph::degree(g, mode = "all")
-        g_deghist = (v_deg) %>% tabulate(nbins = population)
+        g_deghist = ((v_deg) %>% tabulate(nbins = population)) * MCMC_wgt
         
         Prob_Distr_Params[[2]] = as.numeric(gtools::rdirichlet(n = 1, alpha = alpha + g_deghist))
         min_val = min(Prob_Distr_Params[[2]][which(Prob_Distr_Params[[2]]>0)])
