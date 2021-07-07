@@ -1,0 +1,134 @@
+---
+title: "ergm_degree_dist"
+author: "Gabrielle Lemire"
+date: "7/1/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ergm)
+library(stringr)
+set.seed(2021)
+# --- Step 1 get the network
+# don't know why this isn't working
+file_location = dirname(rstudioapi::getActiveDocumentContext()$path)
+file_location = paste0(stringr::str_sub(file_location, end = -26), "degree_dist//Network.R")
+source(file_location)
+# don't know why this isn't working
+source("C://Code//msu//gra//BayesNet//Paper8//degree_dist//Network.R")
+
+# this works when I move the files here
+# can i set my project differently so source works across multiple folders
+# setwd()
+# R projects
+source("Network.R")
+
+comp.dist(GeneticNetwork)
+```
+Why am I getting this error while running **source(file_location)**
+*"cannot open file 'C:/Code/msu/gra/BayesNet/Paper8/ergm_sims/fit_degree_dist\distances_0.02.csv': No such file or directory Error in file(file, "rt") : cannot open the connection"*
+
+
+## Fitting an ERGM Based on Degree Distribution
+
+
+```{r, echo=TRUE}
+summary(GeneticNetwork)
+```
+
+*Note my questions, personal notes, and meeting notes can be found at: https://hivnetworkmodel.atlassian.net/wiki/spaces/HNM/pages/1048313857/ERGM+Sims*
+
+Starting with degree distribution to familiarize myself before moving on to figuring out which terms to use to fit an ergm to a component distribution.
+
+Started with: **https://cran.r-project.org/web/packages/ergm/vignettes/ergm.pdf**
+
+Relevant facts:
+- The *ergm* package in statnet includes about 150 term-computing algorithms.
+- For use with ergm data need to be converted into a network class object (0.2.2 cran)
+
+```{r, echo=TRUE, eval=FALSE}
+?"ergm-terms" #not sure why this won't work
+search.ergmTerms(keyword='homophily')
+vignette('ergm-term-crossRef')
+```
+
+## 0.2.3.1  A simple Bernoulli (“Erdos/Renyi”) model
+
+```{r, echo=TRUE, eval=TRUE}
+# -- look at the g(y) statistic for this model
+summary(GeneticNetwork ~ edges) 
+#output is 1020
+
+# -- Estimate the model
+model.01 <-ergm(GeneticNetwork~edges)
+
+# -- Look at fitted model object
+summary(model.01)
+```
+*"This simple model specifies a single homogeneous probability for all ties, which is captured by the coefficientof theedgesterm. How should we interpret this coefficient? The easiest way is to return to the logit form ofthe ERGM."* p7 CRAN for ERGM
+
+
+```{r, echo=TRUE, eval=TRUE}
+exp(model.01$coeff)/(1 + exp(model.01$coeff))
+# output is .00129
+# is this saying there is a 1.3% "single homogenous probability for all ties" 
+# note 1258 nodes and 1020 edges
+1020/choose(1028, 2) 
+# number of edges/number of possible edges we get 1.9% -- why is it diff? maybe i converted the logit incorrectly?
+
+class(model.01) #its an ergm object - yup
+names(model.01) #there are the components contained in the object
+
+```
+
+
+## 0.2.3.2  Triad Formation
+
+Adding a number of "completed triangles" is often thought to be a measure of clustering.
+
+Description of the coefficients for this model are as follows:
+
+*The conditional log-odds of two actors having a tie, keeping the rest of the network fixed, is*
+
+*−1.74×change in the number of ties+ 0.19×change in number of triangles.*
+
+- *For a tie that will create no triangles, the conditional log-odds is: −1.74*
+- *if one triangle: −1.74 + 0.19 = −1.55*
+- *if two triangles: −1.74 + 2×0.19 = −1.36*
+- *the corresponding probabilities are 0.16, 0.18, and 0.20*
+
+However a simple "edges+triangles" model will not run. We get the following error message:
+*"Error in ergm.MCMLE(init, nw, model, initialfit = (initialfit <- NULL), : Number of edges in a simulated network exceeds that in the observed by a factor of more than 20. This is a strong indicator of model degeneracy or a very poor starting parameter configuration. If you are reasonably certain that neither of these is the case, increase the MCMLE.density.guard control.ergm() parameter."*
+
+Kara is getting the same errors. She's trying to use terms that prevent model degeneracy 
+
+```{r, echo=TRUE, eval=TRUE}
+# -- look at the g(y) statistic for this model
+summary(GeneticNetwork ~ edges+triangles) 
+#output is 1020 edges and 1556 triangles (seriously?! I'm really surprised by this)
+
+# -- Estimate the model
+model.02 <-ergm(GeneticNetwork~edges+triangles)
+
+# -- Look at fitted model object
+summary(model.02)
+```
+
+## 0.2.3.3/0.2.3.4  Nodal Covariates: Effects on Mean Degree/Homophily
+
+We can use node covariates (**nodecov()**) in ERGM models. However our data do not have nodal attributes. Therefore we will skip this section. We will also skip the "directed ties" section since we have an undirected network (**0.2.3.5 Directed Ties**).
+
+*"This model specification does not include a term for homophily by wealth, i.e., a term accounting for similarity in wealth of the two end nodes of a potential tie. It just specifies a relation between wealth and mean degree. To specify homophily on wealth, you could use the ergm-term abs diff. See section 3 below for more information on ergm-terms.?faux" (p9)* 
+
+## 0.3 2. Missing Data
+
+This seems very relevant for our use case if we're going to assume there are more nodes and we aren't sure about their nodes. *"It is important to distinguish between the absence of a tie and the absence of data on whether a tie exists.The former is an observed zero, whereas the latter is unobserved. You should not code both of these as “0”.The ergm package recognizes and handles missing data appropriately, as long as you identify the data as missing. Let’s explore this with a simple example"* 
+
+## Some Takeaways
+
+- before fitting an ergm model check summary(network ~ term1 + term2)
+- check for convergence (as per **section 0.5** )
+
+page rank/eigen value centrality (how google also ranks -- how pages referenced and referencing rank)
+
