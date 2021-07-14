@@ -69,6 +69,10 @@ summary(model.01)
 *"This simple model specifies a single homogeneous probability for all ties, which is captured by the coefficientof theedgesterm. How should we interpret this coefficient? The easiest way is to return to the logit form ofthe ERGM."* p7 CRAN for ERGM
 
 
+*"How do we interpret this coefficient? Coefficients in ERGMs represent the change in the (log-odds) likelihood of a tie for a unit change in a predictor. We can use a simple formula for converting log-odds to probability to understand them better." [...] "So the probability of an edge being in the graph is roughly 0.02. The probability of an edge being drawn should in theory be the same as density - let’s check."*
+https://bookdown.org/markhoff/social_network_analysis/homophily-and-exponential-random-graphs-ergm.html
+
+
 ```{r, echo=TRUE, eval=TRUE}
 exp(model.01$coeff)/(1 + exp(model.01$coeff))
 # output is .00129

@@ -2,7 +2,8 @@ require(tidyr)
 require(ggplot2)
 require(ergm)
 require(sna)
-source("Network.R")
+# source("Network.R")
+source("C://Code//msu//gra//BayesNet//Paper8//degree_dist//Network.R")
 
 #ERGM for testing
 #ergm<-ergm(GeneticNetwork~edges)
