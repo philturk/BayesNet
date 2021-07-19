@@ -114,6 +114,17 @@ ComponentGOF(ergm=model.04, 10)
 mcmc.diagnostics(model.04)
 
 
+##################
+# edges + degree(1) + degree(2) + degree(3)
+##################
+summary(GeneticNetwork~edges + degree(1) + degree(2) + degree(3))
+model.06 = ergm(GeneticNetwork~edges + degree(1) + degree(2) + degree(3)) 
+#15 iterations first time, then 17 the second... what about seed?
+summary(model.06)
+mcmc.diagnostics(model.06)
+plot(gof(model.06))
+ComponentGOF(ergm=model.06, 10)
+
 
 ##################
 # gwdegree(decay=100,fixed=TRUE)
@@ -150,6 +161,9 @@ ergm(GeneticNetwork~edges + kstar(1))
 summary(GeneticNetwork ~ isolates) #659
 ergm(GeneticNetwork~isolates) 
 # degenerate
+# also got degenerate for 
+# ergm(GeneticNetwork~edges + degree(0)) 
+# which makes sense b/c it's the same thing
 
 
 ##################
