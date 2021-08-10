@@ -55,7 +55,7 @@ Init_nets = Inital_bayes_inf(population,Network_stats,
                              Ia,Il,R,beta_a,beta_l,gamma_a,gamma_l, T_dist)
 
 G = Init_nets[[1]] #G_truth #
-P = P_truth #Init_nets[[2]] #P_truth #
+P = Init_nets[[2]] #P_truth #
 
 P_a = NULL
 G_a = NULL
