@@ -177,10 +177,11 @@ Update_P <- function(G,Ia,Il,R,beta_a,beta_l,gamma_a,gamma_l, T) {
 		wts = c()
 		if (length(poss_parent_j) > 0) {
 			for (i in poss_parent_j) {
+			  deg_i <- max(1,length(get.netighborhood(G, i, type = "combined")))
 				if (Il[i] > Ia_j) {
-					w_i = beta_a
+				  w_i = beta_a/deg_i
 				} else {
-					w_i = beta_l
+					w_i = beta_l/deg_i
 				}
 				wts = c(wts,w_i * 1/T[i,j])
 			}
