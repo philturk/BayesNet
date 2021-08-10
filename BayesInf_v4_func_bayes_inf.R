@@ -220,7 +220,7 @@ Update_I <- function(G,P,Ia,Il,R,beta_a,beta_l,gamma_a,gamma_l) {
 
 
 
-Update_Prob_Distr_Params <- function(g, Prob_Distr_Params_hyperprior, Network_stats, Prob_Distr, Prob_Distr_Params, G_stats) {
+Update_Prob_Distr_Params <- function(g, Prob_Distr_Params_hyperprior, Network_stats, Prob_Distr, Prob_Distr_Params, G_stats, MCMC_wgt) {
   
   if  (Network_stats == 'Mixing') {
     if (Prob_Distr[[1]][1] == 'Multinomial_Poisson') {

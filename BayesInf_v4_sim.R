@@ -55,7 +55,7 @@ Init_nets = Inital_bayes_inf(population,Network_stats,
                              Ia,Il,R,beta_a,beta_l,gamma_a,gamma_l, T_dist)
 
 G = Init_nets[[1]] #G_truth #
-P = Init_nets[[2]] #P_truth #
+P = P_truth #Init_nets[[2]] #P_truth #
 
 P_a = NULL
 G_a = NULL
@@ -73,7 +73,7 @@ for (mcmc_counter in c(1:n_mcmc_trials)) {
   
   P = Update_P(G,Ia,Il,R,beta_a,beta_l,gamma_a,gamma_l, T_dist)
   
-  Prob_Distr_Params = Update_Prob_Distr_Params(G,Prob_Distr_Params_hyperprior=Prob_Distr_Params_hyperprior, Network_stats = Network_stats, Prob_Distr = Prob_Distr, Prob_Distr_Params = Prob_Distr_Params, G_stats = G_stats)
+  Prob_Distr_Params = Update_Prob_Distr_Params(G,Prob_Distr_Params_hyperprior=Prob_Distr_Params_hyperprior, Network_stats = Network_stats, Prob_Distr = Prob_Distr, Prob_Distr_Params = Prob_Distr_Params, G_stats = G_stats, MCMC_wgt)
   
   print(mcmc_counter)
   

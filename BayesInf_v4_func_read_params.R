@@ -41,4 +41,4 @@ genetic_bits = 1024
 n_mcmc_trials = 1000
 
 #Prior vs. MCMC weight
-MCMC_wgt = .2
+MCMC_wgt = 0
