@@ -1,0 +1,19 @@
+The likelihood $L(\mathbf{R}| \beta, \theta, k, D, \G, \Pnet, \eta, \mathbf{T}, \mathbf{I})$ can be factored into 6 components: the contribution of contacts over which infections were transmitted, the contribution of contacts over which infections were not transmitted, 
+the contribution of first transitions to each infectious phase, and the contribution of transitions from infectious phase to removal. These are:
+
+\begin{align}
+L_1 &= \prod_{(j,k) \in \mathscr{P}} \sum_{i=1}^{4} \beta_{i}\cdot \exp \{ -\beta_{i} \cdot \max (\min(I_{i+1}^{j}, I_{1}^{k})-I_{i}^{j},0) - \sum_{u=1}^{v} \max(\min(I_{1}^{k}, T_{i_{u,2}}^{j}) - T_{i_{u,1}} ,0) \}  \label{eq:l1} \\
+L_2 &= \prod_{(j,k) \in \mathscr{G} \setminus \mathscr{P}} \prod_{i=1}^{4} \exp\{-\beta_{i}\cdot\max(\min(I_{i+1}^{j}, I_{1}^{k})-I_{i}^{j},0) - \sum_{u=1}^{v} \max(\min(I_{1}^{k}, T_{i_{u,2}}^{j}) - T_{i_{u,1}}^{j} ,0) \}  \label{eq:l2}\\
+L_3 &= \frac{\prod_{l=1}^{m}{(I_{2}^{l}-I_{1}^{l})}^{I_{1}^{k}-1}\theta_I_{1}^{-m I_{1}^{k}}\cdot\exp\{{-\sum_{l=1}^{m}(I_{2}^{l}-I_{1}^{l})/\theta_{I_{1}}}\}}{\Gamma(I_{1}^{k})^m} \label{eq:l3} \\
+L_4 &= \frac{\prod_{l=1}^{m}{(I_{3}^{l}-I_{2}^{l})}^{I_{2}^{k}-1}\theta_I_{2}^{-m I_{2}^{k}}\cdot\exp\{{-\sum_{l=1}^{m}(I_{3}^{l}-I_{2}^{l})/\theta_{I_{2}}}\}}{\Gamma(I_{2}^{k})^m} \label{eq:l4} \\
+L_5 &= \frac{\prod_{l=1}^{m}{(I_{4}^{l}-I_{3}^{l})}^{I_{3}^{k}-1}\theta_I_{3}^{-m I_{3}^{k}}\cdot\exp\{{-\sum_{l=1}^{m}(I_{4}^{l}-I_{3}^{l})/\theta_{I_{3}}}\}}{\Gamma(I_{3}^{k})^m} \label{eq:l5} \\
+L_6 &= \frac{\prod_{l=1}^{m}{(R^{l}-I_{4}^{l})}^{I_{4}^{k}-1}\theta_I_{4}^{-m I_{4}^{k}}\cdot\exp\{{-\sum_{l=1}^{m}(R^{l}-I_{4}^{l})/\theta_{I_{4}}}\}}{\Gamma(I_{4}^{k})^m} \label{eq:l6}
+\end{align}
+
+where $m$ is the total number ultimately infected, and $\mathbf{T}$ is a $u \times 2$ matrix of start and stop times for treatment spells. Superscript indicates the node to which that times corresponds. For notational convenience, $I_{5}$ is equivalent to $R$. We assume for the purposes of this notation that the pair $(j,k)$ is ordered such that $j$ is infected first (or the only infected if it is an S-I edge).
+
+When a person $k$ is uninfected over the course of the epidemic, we take their transition times $(I^k, R^k)$ to be infinite. These combine to give us our likelihood of:
+
+\begin{equation} \label{eq:lprod}
+L = L_1 L_2 L_3 L_4 L_5 L_6
+\end{equation}

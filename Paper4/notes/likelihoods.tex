@@ -1,0 +1,42 @@
+\textbf{Compartments}
+
+\begin{itemize}
+    \item SIR model with infection broken down into different phases of infection
+    \item Left E out, time is negligible compared to timescale of rest of model compartments
+    \item Literature review, consensus model with 4 stages
+    \item Varied a lot in terms of what the compartments were, 4 stages common
+    \item Model flexible, can label 4 stages of infection based on setting, such as defining stages by clinical symptoms, or viral load
+    \item People are susceptible if in the risk population
+    \item Move to infected if they become HIV pos by coming into contact with someone who is infected
+    \item Progress through different stages of infection and removed as long as they are not on treatment
+    \item Can move in and out of treatment for each stage, but assuming they do not progress in the disease course if they achieve viral suppression on treatment
+\end{itemize}
+
+\textbf{Likelihoods}
+
+\begin{itemize}
+    \item Likelihood of time of removal (i.e. death), given data on transmission rates, time on treatment, time of infection, etc.
+    \item In line with what has been done previously, as Ravi described
+    \item Modifies the likelihoods to account for the 4 stages of infection
+    \item Takes into account contributions of contacts where infection was transmitted, and not transmitted, transition to each infectious phase and removal
+    \item Likelihood a product of all of these
+\end{itemize}
+
+\textbf{Contacts}
+
+\begin{itemize}
+    \item First two contributions from contact pairs where infection was ultimately transmitted (L1) and not (L2)
+    \item Both formulas follow an exponential distribution, for time the infected partner could have transmitted to the susceptible partner
+    \item Takes into account time the infected partner spent in each stage of infection, where each stage has a different rate of transmission (how likely for each phase) - betas
+    \item Infection rate higher when in acute stage, and AIDS stage
+    \item How often infection happens for each compartment
+    \item Also subtracts out time infected partner spends on treatment, since assuming cannot contribute to transmission during
+\end{itemize}
+
+\textbf{Transitions}
+
+\begin{itemize}
+    \item Time spent in each infection phase for every person who is ultimately infected
+    \item Coming from exposures that are in the acute, chronic, late, AIDS stage
+    \item Follows a gamma distribution where thetas and kappas (shape and scale) capture the rate of flow into each compartment
+\end{itemize}
