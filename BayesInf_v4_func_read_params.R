@@ -45,3 +45,7 @@ MCMC_wgt = 0
 
 #set transmission network to truth
 init_P_truth_bool = TRUE
+
+#set contact network
+init_G_truth_bool = 1 #0 random, 1 P_start, 2 G_truth
+
