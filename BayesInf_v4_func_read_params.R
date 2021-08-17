@@ -42,3 +42,6 @@ n_mcmc_trials = 1000
 
 #Prior vs. MCMC weight
 MCMC_wgt = 0
+
+#set transmission network to truth
+init_P_truth_bool = TRUE

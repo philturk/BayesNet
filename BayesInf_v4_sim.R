@@ -52,7 +52,8 @@ Prob_Distr_Params = Initial_Data[[8]]
 
 Init_nets = Inital_bayes_inf(population,Network_stats, 
                              Prob_Distr, Prob_Distr_Params,covPattern,
-                             Ia,Il,R,beta_a,beta_l,gamma_a,gamma_l, T_dist)
+                             Ia,Il,R,beta_a,beta_l,gamma_a,gamma_l, T_dist,
+                             P_truth, init_P_truth_bool)
 
 G = Init_nets[[1]] #G_truth #
 P = Init_nets[[2]] #P_truth #

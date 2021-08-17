@@ -1,12 +1,17 @@
 
 Inital_bayes_inf <- function(population,Network_stats, Prob_Distr, Prob_Distr_Params,
                              covPattern,
-                             Ia,Il,R,beta_a,beta_l,gamma_a,gamma_l, T_dist) {
+                             Ia,Il,R,beta_a,beta_l,gamma_a,gamma_l, T_dist,
+                             P_truth, init_P_truth_bool) {
   
-  G_full = graph.full(n = population, directed = FALSE)
-  G_full = G_full %>% set_vertex_attr("name", value = c(0:(population-1)))
-  P_start = Update_P(G_full,Ia,Il,R,beta_a,beta_l,gamma_a,gamma_l, T_dist)
-  
+  if (init_P_truth_bool) {
+    P_start = P_truth
+  } else {
+    G_full = graph.full(n = population, directed = FALSE)
+    G_full = G_full %>% set_vertex_attr("name", value = c(0:(population-1)))
+    P_start = Update_P(G_full,Ia,Il,R,beta_a,beta_l,gamma_a,gamma_l, T_dist)
+  }
+
   CCMnet_Result = CCMnetpy::CCMnet_constr(Network_stats=Network_stats,
                                             Prob_Distr=Prob_Distr,
                                             Prob_Distr_Params=Prob_Distr_Params, 
@@ -29,8 +34,8 @@ Inital_bayes_inf <- function(population,Network_stats, Prob_Distr, Prob_Distr_Pa
   
   U_P_Start = as.undirected(P_start, mode = "collapse")
   V(U_P_Start)$name <- as.character(c(0:(population-1)))
-  #G_start = igraph::union(G_start2, U_P_Start)
-  G_start = U_P_Start
+  G_start = igraph::union(G_start2, U_P_Start)
+  #G_start = U_P_Start
   
   return(list(G_start, P_start))
 }
