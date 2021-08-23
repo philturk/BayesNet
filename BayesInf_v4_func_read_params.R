@@ -19,7 +19,8 @@ Prob_Distr = list(c("Multinomial_Poisson"))
 Prob_Distr_Params = vector("list", 2)
 Prob_Distr_Params[[1]] = c(1000) #Number or edges in mixing matrix [1,1], [1,2], and [2,2]
 #Prob_Distr_Params[[2]] = c(0.1, 0.3, 0.6) 
-Prob_Distr_Params[[2]] = c(c(0.0001, 0.0001, 0.2, 0.3, 0.2, 0.1, 0.05, 0.025, 0.025), rep(0.0001, 491)) 
+Prob_Distr_Params[[2]] = ppois(c(0:(population-1)), lambda=5, log = FALSE)
+  #c(c(0.0001, 0.0001, 0.2, 0.3, 0.2, 0.1, 0.05, 0.025, 0.025), rep(0.0001, 491)) 
 
 
 #Hyper prior parameters

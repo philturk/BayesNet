@@ -6,7 +6,7 @@ post_mse_all = c()
 
 for (sample_size in c(50, 100, 150, 200, 250)) {
   
-  load_file = paste("C:/Users/ravij/OneDrive/Desktop/Network Research/network inference/NetBayes_git/NetBayes_git/combined-results-n", sample_size, ".rda", sep = "") 
+  load_file = paste("C:/Users/ravij/OneDrive/Desktop/Network Research/network inference/NetBayes_git/NetBayes_git/Simulations1/num_samples-mixing/combined-results-n", sample_size, ".rda", sep = "") 
   load(load_file)
   
   prior_mse = c()
@@ -29,7 +29,7 @@ for (sample_size in c(50, 100, 150, 200, 250)) {
     }
     
     net_results.df = data.frame(mean_val = c(apply(G_stats.df[-c(1:800),], 2, mean), apply(ProbDistr_stats.df, 2, mean)),
-                                var_val = c(apply(G_stats.df, 2, var), apply(ProbDistr_stats.df, 2, var)),
+                                var_val = c(apply(G_stats.df[-c(1:800),], 2, var), apply(ProbDistr_stats.df, 2, var)),
                                 stat_type = c(rep("Posterior", 3), rep("Prior", 3)),
                                 net_prop = rep(c("00", "01", "11"), 2),
                                 truth = rep(as.numeric(G_stats_truth), 2)
@@ -95,9 +95,9 @@ post_mse_all_mixing = post_mse_all
 prior_mse_all = c()
 post_mse_all = c()
 
-for (sample_size in c(50, 100, 150, 200, 250)) {
+for (sample_size in c(25, 50, 100, 200)) {
   
-  load_file = paste("C:/Users/ravij/OneDrive/Desktop/Network Research/network inference/NetBayes_git/NetBayes_git/combined-results-n", sample_size, "-dd.rda", sep = "") 
+  load_file = paste("C:/Users/ravij/OneDrive/Desktop/Network Research/network inference/NetBayes_git/NetBayes_git/Simulations2-init_P_truth_bool/num_samples/combined-results-", sample_size, ".rda", sep = "") 
   load(load_file)
   
   prior_mse = c()
@@ -122,14 +122,14 @@ for (sample_size in c(50, 100, 150, 200, 250)) {
     
     
     net_results_full.df = data.frame(mean_val = c(apply(G_stats.df[c(801:1000),], 2, mean), apply(ProbDistr_stats.df, 2, mean)),
-                                     var_val = c(apply(G_stats.df, 2, var), apply(ProbDistr_stats.df, 2, var)),
+                                     var_val = c(apply(G_stats.df[c(801:1000),], 2, var), apply(ProbDistr_stats.df, 2, var)),
                                      stat_type = c(rep("Posterior", population), rep("Prior", population)),
                                      net_prop = rep(paste("Degree", c(0:(population-1)), sep="_"), 2),
                                      truth = rep(as.numeric(G_stats_truth), 2)
     ) %>% mutate(bias2_val = (mean_val - truth)^2) %>%
       mutate(mse_val = bias2_val + var_val)
     
-    net_results.df = net_results_full.df %>% filter(net_prop %in% paste("Degree", c(2:7), sep="_"))
+    net_results.df = net_results_full.df #%>% filter(net_prop %in% paste("Degree", c(2:7), sep="_"))
     
     prior_mse = c(prior_mse, net_results.df %>% filter(stat_type == "Prior") %>% pull(mse_val) %>% sum())
     post_mse = c(post_mse, net_results.df %>% filter(stat_type == "Posterior") %>% pull(mse_val) %>% sum())
@@ -139,8 +139,8 @@ for (sample_size in c(50, 100, 150, 200, 250)) {
   
   post_mse %>% hist()
   
-  prior_0 = prior_mse %>% mean()
-  post_0 = post_mse %>% mean()
+  prior_0 = prior_mse %>% median()
+  post_0 = post_mse %>% median()
   
   prior_mse_all = c(prior_mse_all, prior_0)
   post_mse_all = c(post_mse_all, post_0)
