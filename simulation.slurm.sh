@@ -4,8 +4,8 @@
 ## create a Jobs directory before running
 ##
 #SBATCH --job-name=simulation                      #job name
-#SBATCH --output=Jobs/simulation-%j.out            #output file (with job ID %j)
-#SBATCH --error=Jobs/simulation-%j.err             #error file (with job ID %j)
+#SBATCH --output=Jobs/simulation-%j-%a.out         #output file (with job ID %j, array IC %a)
+#SBATCH --error=Jobs/simulation-%j-%a.err          #error file (with job ID %j, array IC %a)
 #SBATCH --partition=defq                           #partition of Hyalite to run the job on (generally set to defq, has 24 hour time limit, 62 nodes, 32+ cores, 64+ GB of memory)
 #SBATCH --nodes=1                                  #number of nodes to allocate (keep to 1 for higher priority in Hyalite queue?)
 #SBATCH --ntasks-per-node=1                        #number of descrete tasks - keep at one except for MPI (??)
@@ -20,4 +20,4 @@ echo "SLURM_ARRAY_TASK_ID: " $SLURM_ARRAY_TASK_ID ##pastes SLURM_ARRAY_TASK_ID: 
 
 module load R/3.5.3 ##load R into the environment (3.5.3 is latest version on Hyalite at the time)
 
-Rscript --vanilla BayesInf_v4_sim_SKS.R $SLURM_ARRAY_TASK_ID ##run R script, first input is task ID from environment
+Rscript --vanilla BayesInf_v4_sim_hyalite.R $SLURM_ARRAY_TASK_ID ##run R script, first input is task ID from environment
