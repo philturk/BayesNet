@@ -119,7 +119,6 @@ mcmc.diagnostics(model.04)
 ##################
 summary(GeneticNetwork~edges + degree(1) + degree(2) + degree(3))
 model.06 = ergm(GeneticNetwork~edges + degree(1) + degree(2) + degree(3)) 
-#15 iterations first time, then 17 the second... what about seed?
 summary(model.06)
 mcmc.diagnostics(model.06)
 plot(gof(model.06))
@@ -187,3 +186,116 @@ ergm(GeneticNetwork~gwesp())
 summary(GeneticNetwork ~ edges + gwesp()) #1020, 659
 ergm(GeneticNetwork~edges + gwesp()) 
 # degenerate
+
+##################
+# edges + concurrent
+##################
+model.06 = ergm(GeneticNetwork~ edges + concurrent())
+summary(model.06)
+plot(gof(model.06))
+ComponentGOF(ergm=model.06, 100)
+mcmc.diagnostics(model.06)
+
+##################
+# edges + isolates + concurrent
+##################
+ergm(GeneticNetwork~ edges + isolates + concurrent())
+# degenerate
+
+#############################
+# edges + concurrent + cycle(3)
+#############################
+# docs say for undirected graphs cycle value can range from 3 to n
+ergm(GeneticNetwork ~ edges + concurrent + cycle(3))
+# in addition to normal degeneracy message:
+# In addition: Warning messages:
+# 1: In mple.existence(pl) : The MPLE does not exist!
+#   2: In ergm.mple(nw, fd, m, MPLEtype = MPLEtype, init = init, control = control,  :
+#                     glm.fit: fitted probabilities numerically 0 or 1 occurred
+
+
+#############################
+# edges + concurrent() + degree(1) + degree(2) + cycle(3)
+#############################
+# docs say for undirected graphs cycle value can range from 3 to n
+ergm(GeneticNetwork ~ edges + concurrent() + degree(1) + degree(2) + cycle(3))
+# degenerate
+
+#################################
+# edges + degcor()
+#################################
+ergm(GeneticNetwork~ edges + degcor())
+# degenerate
+
+#################################
+# edges + concurrent() + degcor()
+#################################
+ergm(GeneticNetwork~ edges + concurrent() + degcor())
+#degenerate
+
+#######################
+# edges + isolatededges
+#######################
+model.08 = ergm(GeneticNetwork~ edges + isolatededges)
+summary(model.08)
+plot(gof(model.08))
+ComponentGOF(ergm=model.08, 100)
+mcmc.diagnostics(model.08)
+
+
+
+######################################
+# edges + isolatededges + concurrent()
+######################################
+model.09 = ergm(GeneticNetwork~ edges + isolatededges + concurrent())
+summary(model.09)
+plot(gof(model.09))
+ComponentGOF(ergm=model.09, 100)
+mcmc.diagnostics(model.09)
+
+
+
+##################
+# edges + degree(1) + degree(2) + degree(3) + isolatededges + concurrent()
+##################
+# summary(GeneticNetwork~edges + degree(1) + degree(2) + degree(3) + isolatededges + concurrent())
+ergm(GeneticNetwork~edges + degree(1) + degree(2) + degree(3) + isolatededges + concurrent()) 
+# Estimating equations are not within tolerance region.
+# Error in ergm.MCMLE(init, nw, model, initialfit = (initialfit <- NULL),  : 
+#                       MCMLE estimation stuck. There may be excessive correlation between model terms, suggesting a poor model for the observed data. If target.stats are specified, try increasing SAN parameters.
+#                     # isolates? gwesp? gwdegree?
+
+
+##################
+# edges + degree(2) + degree(3) + isolatededges + concurrent()
+##################
+model.10 = ergm(GeneticNetwork~edges + degree(2) + degree(3) + isolatededges + concurrent())
+summary(model.10)
+# Call:
+#   ergm(formula = GeneticNetwork ~ edges + degree(2) + degree(3) + 
+#          isolatededges + concurrent())
+# 
+# Monte Carlo Maximum Likelihood Results:
+#   
+#   Estimate Std. Error MCMC % z value Pr(>|z|)    
+# edges         -5.28914    0.09061      0 -58.374   <1e-04 ***
+#   degree2        0.04286    0.19456      0   0.220   0.8256    
+# degree3       -0.34964    0.17166      0  -2.037   0.0417 *  
+#   isolatededges -0.19518    0.13104      0  -1.489   0.1364    
+# concurrent    -2.49767    0.23848      0 -10.473   <1e-04 ***
+#   ---
+#   Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+# 
+# Null Deviance: 1096078  on 790653  degrees of freedom
+# Residual Deviance:   15010  on 790648  degrees of freedom
+# 
+# AIC: 15020  BIC: 15078  (Smaller is better. MC Std. Err. = 1.168)
+plot(gof(model.10)) #done
+ComponentGOF(ergm=model.10, 100) #done
+mcmc.diagnostics(model.10)
+
+##################
+# edges + degree(2) + degree(3) + isolatededges + concurrent() + gwesp
+##################
+#to do model.11 = ergm(GeneticNetwork~ gwesp + edges + degree(2) + degree(3) + isolatededges + concurrent())
+summary(model.11) #to do
