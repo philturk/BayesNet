@@ -12,7 +12,7 @@
 #SBATCH --cpus-per-task=1                          #number of cores to allocate per job (generally set to 8 to 32, which is 0.3 to 1 node)
 #SBATCH --mem-per-cpu=2000                         #system memory to use (per core) (generally set at 2GB/core = 2000MB)
 #SBATCH --time=23:59:00                            #maximum job run time (dd-hh:mm:ss, generally set at 20% longer than expect, cannot exceed 24 hours on defq)
-#SBATCH --array=1-100                              #indices for number of jobs in array (SLURM_ARRAY_TASK_ID)
+#SBATCH --array=1-50                               #indices for number of jobs in array (SLURM_ARRAY_TASK_ID)
 #SBATCH --mail-user=sallyslipher@montana.edu       #send emails to this address
 #SBATCH --mail-type=FAIL                           #email on when a job fails (options are ALL, BEGIN, END, FAIL, REQUEUE)
 
