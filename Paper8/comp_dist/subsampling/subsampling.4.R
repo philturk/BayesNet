@@ -10,6 +10,8 @@ nsims = 100 #number of subsamples for each sampling proportion
 row_names = paste0("4_", c(1:100)) #row names for array
 sample_rate = .4 #sampling rate
 file_location = dirname(rstudioapi::getActiveDocumentContext()$path)
+size = 1258 # nodes(GeneticNetwork) # size of genetic network, 1258 in our case
+samplesize = round(size*sample_rate) # size of sampled genetic network
 sim_dist <- array(NA, dim = c(length(row_names), 23, nsims), 
                   dimnames = list(row_names, 1:23, NULL)) #array to store sims
 
@@ -40,18 +42,23 @@ melt_all_props100by100 = function(data){
 
 
 for(i in 1:length(row_names)){
+  deleted_vertices <- sample(1:size, round(size*(1-sample_rate)), replace = FALSE)
+  
+  sampledNetwork <- network(GeneticNetwork[-deleted_vertices, -deleted_vertices])
+  
   for(j in 1:nsims){
     #Randomly sample vertices to delete
-    deleted_vertices <- sample(1:1258, round(1258*(1-sample_rate)), replace = FALSE)
+    deleted_vertices <- sample(1:samplesize, round(samplesize*(1-sample_rate)), replace = FALSE)
     
     #Build subnetwork without deleted vertices
-    sampledNetwork <- network(GeneticNetwork[-deleted_vertices, -deleted_vertices])
+    subsampledNetwork <- network(sampledNetwork[-deleted_vertices, -deleted_vertices])
     
     # Compute cluster size distribution and store
-    sim_dist[i,,j] <- component.dist(sampledNetwork)$cdist[1:23]
+    sim_dist[i,,j] <- component.dist(subsampledNetwork)$cdist[1:23]
   }
-  print(paste0("completed sim ", as.character(i), " out of ", as.character(length(row_names))))
+  print(paste0("completed sim", as.character(i), " out of ", as.character(length(row_names))))
 }
+
 
 # change format, save
 new_list <- plyr::adply(sim_dist,1,unlist,.id = NULL)
