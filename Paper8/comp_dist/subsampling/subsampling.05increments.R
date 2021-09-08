@@ -5,9 +5,15 @@ library(sna)
 getwd()
 source("comp_dist//Network.R") 
 
+# description I wrote down: take one sample at 50%
+# subsample 100 times at each of .45, .4... .2
+# fit exp 3 param
+# repeat 100 times
+
 # declare variables to go from 50 to 20 in increments of .05 with 100 subsamples at each level
 nsims = 100 #number of subsamples for each sampling proportion
-row_names = seq(from=.5, to=.2, by=-.05) #row names for array
+row_names = seq(from=.45, to=.2, by=-.05) #row names for array
+sample_rate = .5
 file_location = dirname(rstudioapi::getActiveDocumentContext()$path)
 size = 1258 # nodes(GeneticNetwork) # size of genetic network, 1258 in our case
 sim_dist <- array(NA, dim = c(length(row_names), 23, nsims), 
@@ -15,13 +21,13 @@ sim_dist <- array(NA, dim = c(length(row_names), 23, nsims),
 
 
 for(i in 1:length(row_names)){
-  sample_rate = row_names[i]
   
   deleted_vertices <- sample(1:size, round(size*(1-sample_rate)), replace = FALSE)
   
   sampledNetwork <- network(GeneticNetwork[-deleted_vertices, -deleted_vertices])
   
   samplesize = round(size*sample_rate) # number of nodes for that sample_rate for subsample
+  # will be the same for all 100*6 subsample rates times (since we repeat .5 for)
   
   for(j in 1:nsims){
     #Randomly sample vertices to delete
