@@ -3,7 +3,7 @@ library(sna)
 
 #Build complete genetic network
 getwd()
-source("comp_dist//Network.R") 
+source("C://Code//msu//gra//BayesNet//Paper8//comp_dist//Network.R") 
 
 # declare variables
 nsims = 100 #number of subsamples for each sampling proportion
@@ -14,6 +14,8 @@ size = 1258 # nodes(GeneticNetwork) # size of genetic network, 1258 in our case
 samplesize = round(size*sample_rate) # size of sampled genetic network
 sim_dist <- array(NA, dim = c(length(row_names), 23, nsims), 
                   dimnames = list(row_names, 1:23, NULL)) #array to store sims
+sim_dist_samp <- array(NA, dim = c(length(row_names), 23), 
+                       dimnames = list(row_names, 1:23)) #array to store samples
 
 # function for later
 melt_all_props100by100 = function(data){
@@ -46,6 +48,8 @@ for(i in 1:length(row_names)){
   
   sampledNetwork <- network(GeneticNetwork[-deleted_vertices, -deleted_vertices])
   
+  sim_dist_samp[i,] <- component.dist(sampledNetwork)$cdist[1:23]
+  
   for(j in 1:nsims){
     #Randomly sample vertices to delete
     deleted_vertices <- sample(1:samplesize, round(samplesize*(1-sample_rate)), replace = FALSE)
@@ -60,9 +64,13 @@ for(i in 1:length(row_names)){
   
 }
 
-# change format, save
+# change format, save subsamples
 new_list <- plyr::adply(sim_dist,1,unlist,.id = NULL)
-write.csv(new_list, paste0(file_location, "//sim_dists.6-comp_dist-100.csv"))
+write.csv(new_list, paste0(file_location, "//subsamples.6-comp_dist-100.csv"))
+
+# change format, save samples
+new_list_samp <- plyr::adply(sim_dist_samp,1,unlist,.id = NULL)
+write.csv(new_list_samp, paste0(file_location, "//samples.6-comp_dist-100.csv"))
 
 # change format again, save
 df_all_sim = melt_all_props100by100(data = new_list)
