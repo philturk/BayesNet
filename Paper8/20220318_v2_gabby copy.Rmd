@@ -1,0 +1,2165 @@
+---
+title: "Power Law on Network Component Sizes"
+author: "Philip Turk"
+date: "`r Sys.Date()`"
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+always_allow_html: true  
+subtitle: Gabrielle Lemire's project
+bibliography: ref.bib
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, echo=FALSE}
+knitr::opts_chunk$set(fig.pos = "!H", out.extra = "")
+```
+
+```{r 01, include = FALSE}
+library(tidyverse)
+library(poweRlaw)
+library(kableExtra)
+library(knitr)
+library(VGAM)
+library(boot)
+# library(ggpubr)
+
+My_Theme <-  theme(
+   axis.title = element_text(size = 14),
+   axis.text = element_text(size = 14),
+   legend.text = element_text(size = 14),
+   legend.title = element_text(size = 14),
+   plot.title = element_text(size = 16), ## to center, add hjust = 0.5
+   plot.subtitle = element_text(size = 14),
+   plot.caption = element_text(size = 14, hjust = 0))
+
+temp01 <- read_csv("/Users/pturk02/Dropbox/Atrium/Projects/Carnegie_Nicole/Lemire_Gabrielle/Data/gabby.csv")
+temp09 <- temp01
+temp09 <- temp09 %>% mutate(rel_freq = freq/sum(freq))
+temp01 <- temp01 %>% filter(!freq == 0)
+temp01 <- temp01 %>% mutate(rel_freq = freq/sum(freq))
+
+
+temp02 <- tibble(size = rep(temp01$size, temp01$freq))
+temp02 <- temp02 %>% arrange(desc(size)) %>% mutate(total = sum(size))
+
+##### EDA I did on 2022/01/11 re: patchiness
+# my_pl(temp02$size) ## 2.748148
+# temp01_junk <- temp02 %>% filter(!size %in% c(21, 20, 14, 12, 9,  8,  7,  6)) ## 2.970444
+# temp01_junk <- temp02 %>% filter(size %in% c(23, 1, 2, 3)) ## 3.252829
+# my_pl(temp01_junk$size)
+```
+
+### Part 1
+
+Following is a plot of the distribution of component sizes for the network ($n$ = 1,258 nodes). I should add that sometimes in this sort of context and with more data (in text analytics, anyway), we would use relative component sizes (here, divided by 1,258). Also, it is not required to explicitly account for instances where the component size was never observed. For example, it is not required here to explicitly add in a 0 frequency if a component of size 22 was not observed. 
+
+```{r 02, echo=FALSE, fig.align='center', fig.height=6, fig.width=6, message=FALSE}
+# ggplot(temp02) +
+#   geom_histogram(aes(x = size, y = ..count../sum(..count..)), show.legend = FALSE, binwidth = 1) 
+
+ggplot(temp02, aes(size)) +
+  geom_histogram(show.legend = FALSE, binwidth = 1, col="grey") + 
+  scale_x_continuous(breaks = seq(min(temp02$size), max(temp02$size)), minor_breaks = NULL) + 
+  labs(x = "Component Size", y = "Frequency") +
+  labs(title = "Distribution of Component Sizes for Network") + My_Theme
+```
+
+```{r 03, include=FALSE}
+## Data are really sparse; careful with the ranks 
+size_by_rank <- temp02 %>%
+  mutate(rank_row = row_number(), rank_tie = rank(-size), 
+        rel_comp_size = size/total) 
+```
+
+Following is a plot of the distribution of component sizes for the network on the log base 10 scale for both the component sizes and the frequencies. We see that there is at least an approximate negative linear association. 
+
+```{r 04, echo=FALSE, fig.align='center', fig.height=6, fig.width=6}
+# lm(log10(rel_freq) ~ log10(size), data = temp01) ## slope = -2.056  
+
+temp01 %>%
+  ggplot(aes(size, freq)) + geom_point(color = "red") +
+  geom_line(size = 1.1, alpha = 0.8) +
+  scale_x_log10() + 
+  scale_y_log10() + 
+  labs(title = "Distribution of Component Sizes for Network", 
+       subtitle = "Log_10 Scale for Both Axes", x = "Component Size", y = "Frequency") + My_Theme
+```
+
+Following is a so-called "*rank-frequency plot*" of the log base 10 component sizes for the network versus the log base 10 rank of the component size (smallest rank is the **largest** component size). Tied ranks were averaged for simplicity of exploration. There is an obvious negative linear association. If we fit the model $\log_{10}(\text{size}_i) = \beta_0 - \frac{1}{\alpha}\log_{10}(\text{rank}_i - 0.5) + \varepsilon_i$, for $i = 1, \ldots, n$ components [@gabaix2011rank], then we obtain an estimated $\alpha$ of 1.91 (in a moment, we will talk about why we have this cryptic parameterization). I've added a fitted regression line for a reference.   
+
+```{r 05, echo=FALSE, fig.align='center', fig.height=6, fig.width=6}
+# lm(log10(size) ~ log10(rank_tie - 0.5), data = size_by_rank) ## slope = -0.5222
+# lm(log10(size) ~ log10(rank_row), data = size_by_rank)
+
+size_by_rank %>%
+  ggplot(aes(rank_tie, size)) + geom_point(color = "red") +
+   geom_abline(intercept = 1.4078, slope = -0.5222,
+               color = "green", linetype = 2) +
+  geom_line(size = 1.1, alpha = 0.8) +
+  scale_x_log10() +
+  scale_y_log10() + 
+  labs(title = "Plot of Component Sizes for Network 
+on Ranked Component Size", 
+       subtitle = "Log_10 Scale for Both Axes", x = "Ranks (With Averaged Ties)", y = "Component Size") + My_Theme
+```
+
+The power law probability mass function for (discrete) component size $S$ is:
+$$P[S = s] = \frac{s^{-\alpha}}{\zeta(\alpha, s_{\rm min})}$$
+where:
+$$\zeta(\alpha, s_{\rm min}) = \sum_{n = 0}^{\infty}(n + s_{\rm min})^{-\alpha}$$
+is the Hurwitz zeta function evaluated numerically in R. These are given in @gillespie_fitting_2015. 
+
+For our network, using the `poweRlaw` package in R, $s_{\rm min}$ is estimated to be 1, and $\alpha$ is estimated to be ~2.75. This is a bit distant from the value of 1.91 using OLS above, but this later technique should be thought of as a blunt force method.  
+
+We now use bootstrapping to get a confidence interval for $\alpha$. Based on initial tuning, I used 3,000 bootstrap samples. The bootstrap distribution looked a touch right-skewed. A 95% bootstrap percentile confidence interval is [2.62, 2.91].  
+
+```{r 06, include=FALSE}
+pl_size <- displ$new(temp02$size)
+est_size_pl <- estimate_xmin(pl_size)
+
+# pl_size$setXmin(est_size_pl)
+# plot(pl_size) ## Limits are weird; plot looks distorted
+# lines(pl_size, col = 2)
+```
+
+```{r 07, echo=FALSE, cache=TRUE, message=FALSE}
+bs_size <- bootstrap(pl_size, no_of_sims = 3000, threads = 4, seed = 1)
+# bs_size 
+# mean(bs_size$bootstraps[, 2]) ## Ignore
+# sd(bs_size$bootstraps[, 2]) ## Ignore
+# mean(bs_size$bootstraps[, 3]) ## 2.75
+# sd(bs_size$bootstraps[, 3]) ## 0.0763
+# plot(bs_size, trim = 0.1) ## Tuning
+# hist(bs_size$bootstraps[, 3], breaks = "fd") ## Looks a touch right-skewed.
+
+# sort(bs_size$bootstraps[, 3])[3000*0.025] ## 2.62
+# sort(bs_size$bootstraps[, 3])[3000*0.975] ## 2.91
+```
+
+We now use the bootstrap test for power law goodness-of-fit described in @gillespie_fitting_2015 (his so-called Algorithm 2). After initial tuning, I ran 3,000 bootstrap samples and received a $p$-value of 0.7238. Hence, there is insufficient evidence to suggest the data are *not* from a power law distribution. 
+
+```{r 08, echo=FALSE, cache=TRUE, message=FALSE}
+bs_size_p <- bootstrap_p(pl_size, no_of_sims = 3000, threads = 4, seed = 1)
+# bs_size_p
+# plot(bs_size_p)
+```
+
+The plot below shows the frequency distribution of the component sizes (black dots), with implied zeros added where necessary, and our fitted power law distribution overlaid (green line).  
+
+```{r 09, echo=FALSE, fig.align='center', fig.height=6, fig.width=6}
+xmin <- 1; alpha <- 2.748148
+x <- xmin:23 ## Careful; dpldis() for pred_rel_freq below will sum to 0.998, 
+             ## not 1.00, on this domain
+
+temp09b <- temp09 %>% mutate(pred_freq = round(dpldis(x, xmin, alpha)*sum(freq)),
+                             rel_freq = freq/sum(freq), 
+                             pred_rel_freq = dpldis(x, xmin, alpha))
+
+temp09b %>%
+  ggplot(aes(x = size)) +
+  geom_point(aes(y = freq), show.legend = FALSE) +
+  geom_line(aes(y = pred_freq), color = "green", show.legend = FALSE) +
+  labs(title = "Distribution of Component Sizes for Network", 
+       subtitle = "Fitted model = green line; observed data = black dots", x = "Component Size", y = "Frequency") + My_Theme
+```
+
+### Odds-and-Ends
+
+- Given how nicely the power law distribution fit the data, and the nature of the problem, I was disinclined to explore other heavy-tailed distributions for now (e.g., exponential).
+- I think the use of the power law distribution for this problem is reasonable. For example, it is well-known that city size follows a power law distribution. A moment's reflection shows our situation to be analogous. That is, the nodes are the "citizens", and the aggregation into components (albeit through genetic linkage) represent "cities". Previous research shows the population of US cities follows a power law distribution with $\widehat{\alpha} = 2.30$, an estimate that is somewhat close to ours.
+- Per the third point in New Modeling Attempt (Gabby's 2021/05/21 summary paper), I do not feel there is anything wrong with pooling the 100 simulations. In fact, in text analytics, this is routinely done. In our case, each sampling proportion setting represents the "corpus", and a simulation represents a "document". One could look at the simulation-specific empirical log-log distributions with a simulation envelope to get a sense of sample-to-sample variation. You could do worse than to use the median frequency (or rounded mean frequency) over simulations at each observed component size to get a sense of marginalized behavior for networks sampled at the given sampling fraction.
+- Ravi brought up the point about how the sampling is done. In my mind, I view the method as follows. Take a one-shot SRSWOR of xx% nodes from the "population" network. Construct a "sample" network based on genetic distance and obtain the component sizes. (And I assume we hope the sample network is representative of the population network with respect to component sizes, taking into account reduced frequencies, variance being affected from large sampling fractions taken from a finite population, etc.) Ravi thinks of it differently, and uses a sequential approach. I will leave it to him to explain his thought process. 
+
+### Part 2: Examining 100 Samples from Network at Sampling Fraction 0.95 (*updated*)
+
+Let the sampling fraction $f$ equal the sample size $n$ divided by the number of nodes, or population size, $N$. I use Gabby's 100 samples where $f = 0.95$. This corresponds to $n = 1,195$ nodes. The plot below shows frequency histograms of the component sizes for all 100 samples. Obviously, it is hard to see much, but there are small, meaningful differences from sample-to-sample.
+
+```{r 10, include = FALSE}
+temp10 <- read_csv("/Users/pturk02/Dropbox/Atrium/Projects/Carnegie_Nicole/Lemire_Gabrielle/Data/mini_gabby_only_95.csv")
+temp10 <- temp10 %>% relocate(sim)
+temp10$sim <- sub(".", "", temp10$sim)
+temp10$sim <- as.factor(temp10$sim) 
+temp10$sim <- reorder(temp10$sim, rep(1:100, each = 23))
+temp10_with0 <- temp10
+temp10_with0 <- temp10_with0 %>% group_by(sim) %>% mutate(rel_freq = freq/sum(freq))
+temp10 <- temp10 %>% filter(!freq == 0)
+temp10 <- temp10 %>% group_by(sim) %>% mutate(rel_freq = freq/sum(freq))
+
+# check <- temp10 %>% group_by(sim) %>% summarize(tot_prods = sum(size*freq)) ## All sims give 1,195
+
+temp01_pop <- temp01 %>% mutate(sim = "Pop", .before = 1)
+temp10_plus_pop <- rbind(temp01_pop, temp10) %>% mutate(Type = if_else(sim == "Pop", "Pop", "Samp"))
+
+temp11 <- tibble(sim = rep(temp10$sim, temp10$freq), size = rep(temp10$size, temp10$freq))
+temp11 <- temp11 %>% group_by(sim) %>% arrange(desc(size), .by_group = TRUE) %>% mutate(total = 1195)
+
+## Unnecessary
+# temp02_pop <- temp02 %>% mutate(sim = "Pop", .before = 1)
+# temp11_plus_pop <- rbind(temp02_pop, temp11) %>% mutate(Type = if_else(sim == "Pop", "Pop", "Samp"))
+```
+
+```{r 11, echo=FALSE, fig.align='center', message=FALSE}
+ggplot(temp11, aes(size)) +
+  geom_histogram(show.legend = FALSE) + labs(x = "Component Size", y = "Frequency") +
+  labs(title = expression("Distribution of Component Size for Network Samples ("*italic(f)~ "= 0.95)"), subtitle = "At Each of 100 Samples") + 
+  facet_wrap(~ sim) + theme(strip.text = element_blank(), axis.text = element_text(size = 6))
+```
+
+```{r 12, eval=FALSE, include=FALSE}
+## Unnecessary
+# temp12 <- temp11_plus_pop %>% group_by(sim) %>%
+#   mutate(rank_row = row_number(), rank_tie = rank(-size), 
+#         rel_comp_size = size/total) 
+```
+
+I then took each of the 100 samples and fit the power law model. In each case, I a.) obtained $\widehat{\alpha}$, and b.) computed the bootstrap test for power law goodness-of-fit exactly as described above. Total elapsed time, running 4 cores in parallel on my Mac, took a little over 2 hours; so, this is not a trivial undertaking.
+
+The plot below shows the frequency distribution for the 100 sample $\widehat{\alpha}$'s. In all 100 cases, $s_{\rm min}$ was estimated to be 1. The red line represents the mean across 100 samples, while the green line represents the "population" $\widehat{\alpha} = 2.75$ from above. Blue solid lines correspond to the 0.025 and 0.975 quantiles. The difference between the red and green line will have little practical effect for the work we do here.
+
+```{r 13, include=FALSE}
+# temp13_holder <- matrix(NA, nrow = 100, ncol = 3)
+# 
+# ptm <- proc.time()
+# for(i in 1:100){
+# temp13 <- temp11 %>% filter(sim == as.character(i))
+# 
+# pl_size13 <- displ$new(temp13$size)
+# est_size_pl13 <- estimate_xmin(pl_size13)
+# temp13_holder[i, 1] <- est_size_pl13$xmin
+# temp13_holder[i, 2] <- est_size_pl13$pars
+# bs_size_p13 <- bootstrap_p(pl_size13, no_of_sims = 3000, threads = 4, seed = 1)
+# temp13_holder[i, 3] <- bs_size_p13$p
+# cat("iteration = ", i, "\n")
+# }
+# proc.time() - ptm
+# 
+# temp13_holder
+
+## Save a single object to a file
+# saveRDS(temp13_holder, "Data/95sims100.rds")
+## Read it back in
+temp13_holder <- readRDS("Data/95sims100.rds")
+hist(temp13_holder[,2])
+## I will later add two lines; one for mean, one for pop
+hist(temp13_holder[,3])
+## I will later add a line at 0.05
+```
+
+```{r 14, echo=FALSE, fig.align='center', message=FALSE}
+temp14 <- as_tibble(temp13_holder, .name_repair = ~ c("x_min", "alpha", "p_val"))
+
+ggplot(temp14, aes(alpha)) +
+  geom_histogram(show.legend = FALSE) + labs(x = expression(hat(alpha)), y = "Frequency") +
+  labs(title = expression("Distribution of" ~hat(alpha)~ "for Network Samples ("*italic(f)~ "= 0.95)"),
+       subtitle = expression("Green Dotted Line is Population" ~hat(alpha)* "; Red Dotted Line is Mean" ~hat(alpha)~ "Across 100 Samples"), caption = "Blue Solid Lines are 0.025 and 0.975 Quantiles") +
+  geom_vline(xintercept = 2.748148, linetype = "dotted", color = "green", size = 1.5) +
+  geom_vline(xintercept = mean(temp14$alpha), linetype = "dotted", color = "red", size = 1.5) +
+  geom_vline(xintercept = quantile(temp14$alpha, p = 0.025), linetype = "solid", color = "blue", size = 0.5) +
+  geom_vline(xintercept = quantile(temp14$alpha, p = 0.975), linetype = "solid", color = "blue", size = 0.5) +
+  theme(plot.caption = element_text(hjust = 0))
+
+# cbind(dpldis(x, xmin, 2.748148), dpldis(x, xmin, mean(temp14$alpha)),
+#       dpldis(x, xmin, 2.748148) - dpldis(x, xmin, mean(temp14$alpha)))
+```
+
+Next, we examine the frequency distribution for the $p$-values from the bootstrap test for power law goodness-of-fit conducted on each of the 100 samples. At least in this case, all the $p$-values are above 0.05 (the green line), but there is considerable variation among tests. 
+
+```{r 15, echo=FALSE, fig.align='center', message=FALSE}
+ggplot(temp14, aes(p_val)) +
+  geom_histogram(show.legend = FALSE) + labs(x = expression(italic(p)* "-Value"), y = "Frequency") +
+  labs(title = expression("Distribution of GOF" ~italic(p)* "-Values for Network Samples ("*italic(f)~ "= 0.95)"), subtitle = "Across 100 Samples; Green Line is 0.05") +
+  geom_vline(xintercept = 0.05, linetype = "dotted", color = "green", size = 1.5)
+```
+
+Care must be taken when working with samples drawn from networks because the frequencies of component sizes will necessarily decrease as $f$ decreases. Hence, for the following two graphs, it is best to use *relative* frequencies.
+
+The following is a plot showing the relative frequency distributions for component size (log$_{10}$-log$_{10}$ scale) for all 100 samples *and* the population. Because spaghetti plots with interpolation can be misleading, I use the data set explicitly containing zero frequencies for any component sizes that were not observed within any sample. When plotted on a log scale, this required me to trim the $y$-axis (Relative Frequency) to an arbitrarily small number (< 0.0001) as a quick workaround.  
+
+For the most part, the samples are emblematic of the population (red line). However, the samples start to show small differences out in the right tail. This is similar to a well-known problem in extreme value theory. Long, right tails are just hard to nail down.     
+
+```{r 16, echo=FALSE, fig.align='center', warning=FALSE}
+temp10_with0 %>%
+  ggplot() +
+  geom_line(aes(x = size, y = rel_freq, group = sim), size = 0.5, alpha = 0.25) +
+  geom_line(data = temp09, aes(x = size, y = rel_freq), size = 1, alpha = 1, 
+            linetype = "dashed", color = "red") +
+  coord_cartesian(ylim = c(0.0001, NA)) +
+  scale_x_log10() + 
+  scale_y_log10() + 
+  labs(title = expression("Distribution of Component Size for Network Samples ("*italic(f)~ "= 0.95)"), 
+       subtitle = "Log_10 Scale for Both Axes; Red Line is Population; Black Lines are 100 Samples", x = "Component Size", y = "Relative Frequency")
+```
+
+The table below shows the count of the 100 samples where at least one of the given component sizes (`size`) was observed. It also shows if at least one component of the given size was ever observed in the population (``In pop?``). For example, there were 2 samples where at least one component of size 15 was observed, yet no components of size 15 were observed in the population.  
+
+```{r 16b, echo=FALSE}
+temp16b <- temp10 %>% group_by(size) %>% summarize(n = n()) 
+temp16b <- temp16b %>% mutate(`In pop?` = if_else(size %in% temp01$size, "Yes", "No"))
+t(temp16b) %>% kbl(caption = "Count of 100 Samples With One or More Components of Given Size") %>%
+  column_spec(1:24, border_left = T, border_right = T) %>% kable_classic(full_width = F) %>%
+  kable_styling(latex_options = c("scale_down", "hold_position"))
+```
+
+The following is a "do-over" of the previous plot. At each component size from 1-to-23, I took the 0.025 and 0.975 quantiles of the 100 relative frequencies to form a "simulation envelope" (teal band). The patchy constriction of the teal band can be understood using the table above. For example, only 2 samples were observed containing at least one component of size 15. Specifically, Samples \#80 and \#95 each returned one component of size 15 (with relative frequencies of 1/798 and 1/793, respectively) with the other 98 samples returning implied relative frequencies equal to zero. More samples would be needed to form a sensible 95% simulation envelope. 
+
+Continuing, the blue, dashed line corresponds to the population. The red line corresponds to the median relative frequency; notice that it tracks nicely with the blue, dashed population line until we get further out in the right tail. The green line represents our fitted power law model from Part 1. For the most part, both lines fluctuate around what is predicted by the power law. Note the log scale makes any apparent discrepancies look much worse than they are; indeed, the bootstrap test for power law goodness-of-fit for the population (in Part 1) gave  a $p$-value of 0.7238.
+
+```{r 17, echo=FALSE, fig.align='center', warning=FALSE}
+temp17 <- temp10_with0 %>% group_by(size) %>% 
+  summarize(max = max(rel_freq),
+            upper = quantile(rel_freq, p = 0.975),
+            min = min(rel_freq),
+            lower = quantile(rel_freq, p = 0.025),
+            med = median(rel_freq))
+poly17 <- tibble(Size = c(temp17$size, rev(temp17$size)), Bounds = c(temp17$upper, rev(temp17$lower)))
+
+temp10_with0 %>%
+  ggplot(aes(size, rel_freq)) +
+  geom_line(data = temp17, aes(x = size, y = med), colour = "red") +
+  geom_line(data = temp09b, aes(x = size, y = pred_rel_freq), colour = "green") +
+  geom_line(data = temp09b, aes(x = size, y = rel_freq), linetype = "dashed", colour = "blue") +
+  geom_polygon(data = poly17, aes(x = Size, y = Bounds), fill = "#00BFC4", alpha = 0.4) +
+  scale_x_log10() + 
+  scale_y_log10() +
+  labs(title = expression("Distribution of Component Size for Network Samples ("*italic(f)~ "= 0.95)"), 
+       subtitle = "Log_10 Scale for Both Axes; Red Line is Median Rel Freq Across 100 Samples; 
+Teal Band is 95% Simulation Envelope; Blue Dashed Line is Population
+Green Line is Fitted Power Law Model for Population", x = "Component Size", y = "Relative Frequency")
+```
+
+What would the plot look like if we were to plot it in "real-time"; that is, remove the log scale for relative frequency? Looking below gives us a sense of a very different story! 
+
+```{r 17c, echo=FALSE, fig.align='center', warning=FALSE}
+temp10_with0 %>%
+  ggplot(aes(size, rel_freq)) +
+  geom_line(data = temp17, aes(x = size, y = med), colour = "red") +
+  geom_line(data = temp09b, aes(x = size, y = pred_rel_freq), colour = "green") +
+  geom_line(data = temp09b, aes(x = size, y = rel_freq), linetype = "dashed", colour = "blue") +
+  geom_polygon(data = poly17, aes(x = Size, y = Bounds), fill = "#00BFC4", alpha = 0.4) +
+  scale_x_log10() + 
+  # scale_y_log10() +
+  labs(title = expression("Distribution of Component Size for Network Samples ("*italic(f)~ "= 0.95)"), 
+       subtitle = "Log_10 Scale for Only X-Axis; Red Line is Median Rel Freq Across 100 Samples; 
+Teal Band is 95% Simulation Envelope; Blue Dashed Line is Population
+Green Line is Fitted Power Law Model for Population", x = "Component Size", y = "Relative Frequency")
+```
+
+The approach given here would be more useful if we had more samples (1,000, say). We would then extend it to look at a sequence of sampling fractions $f$. 
+
+In closing, and as Ravi brought up last week, this report is not meant to suggest that a power law model will uniformly be "best" across all types of network compositions. 
+
+### Part 3: Comparing Distributions for Population Network
+
+In order to take a deeper dive into an appropriate model for component size for the population network, we compare the following candidates: power law (as defined above), discrete log-normal, Yule-Simon, discrete exponential, and Poisson. One has to be a bit careful here. The reason is because these distributions have been modified, or "normalized", so that they adhere to the general form of a power-law distribution (see @clauset2009power, for example).  
+
+To compare fitted models, the thought occurred to me to use Akaike's Information Criterion (AIC), as opposed to all possible pairs of likelihood ratio tests (Vuong's test). We use Akaike's Information Criterion defined as -2\*log-likelihood(mle) + 2\*npar where npar represents the number of parameters in the fitted model. (There is a technical quibble about how to treat estimation of $s_{\rm min}$. Specifically, should we acknowledge this in the penalty term of AIC? For the sake of parsimony, I do not do so here.)
+
+I fit the aforementioned five models to the observed component sizes from the population network, rightfully setting $s_{\rm min} = 1$ for each, and computed the AIC value. These are displayed in the table below: 
+
+```{r 18, include=FALSE}
+## Fit discrete power law
+m01 <- displ$new(temp02$size)
+m01$setXmin(1) ## From before
+m01$setPars(2.748148) ## From before
+ll01 <- dist_ll(m01)
+-2*ll01 + 2*1 ## AIC = 1373.489
+## Poisson
+m02 <- dispois$new(temp02$size)
+estimate_xmin(m02) ## Yikes; x_min = 20 :(
+m02$setXmin(1)
+estimate_pars(m02)
+m02$setPars(0.89854)
+ll02 <- dist_ll(m02)
+-2*ll02 + 2*1 ## AIC = 2017.57
+## Discrete log normal
+m03 <- dislnorm$new(temp02$size)
+estimate_xmin(m03)
+m03$setXmin(1)
+m03$setPars(c(-7.096682, 2.294008))
+ll03 <- dist_ll(m03)
+-2*ll03 + 2*2 ## AIC = 1375.321
+## Discrete exponential
+m04 <- disexp$new(temp02$size)
+estimate_xmin(m04) ## x_min = 5
+m04$setXmin(1)
+estimate_pars(m04)
+m04$setPars(1.078156)
+ll04 <- dist_ll(m04)
+-2*ll04 + 2*1 ## AIC = 1615.216
+## Yule-Simon
+m05 <- vglm(size ~ 1, yulesimon("identitylink"), data = temp02)
+m05
+# summary(m05) ## coef is estimate of shape parameter
+# fittedvlm(m05) ## coef(m05)/(coef(m05) - 1) = 1.464939, mean
+ll05 <- -693.8937 
+-2*ll05 + 2*1 ## 1389.787
+
+# compare_distributions(m01, m03) ## two-sided p-value = 0.8705417
+```
+
+```{r 17b, echo=FALSE}
+temp17b <- tibble(Model = c("Power Law", "Poisson", "Disc logN", "Disc Exp",                                 "Yule-Simon"),
+                  AIC = c(1373.49, 2017.57, 1375.32, 1615.22, 1389.79)) %>%
+  arrange(AIC)
+
+temp17b %>% kbl(align = "l") %>%
+  column_spec(1:2, border_left = T, border_right = T) %>% kable_classic(full_width = F) %>%
+  kable_styling(latex_options = "hold_position")
+```
+
+As a general rule, the smaller the AIC value, the better the fit *and* models that are within 2 AIC units of each other are considered to provide equivalent fit (although 2 is now thought to be too low these days and some lobby for 4 or 5 as a cutoff). In our case, both the power law and discrete log-normal models clearly provide the best relative fit to the data. 
+
+Using Vuong's test, we use the power law and discrete log-normal models to test:
+$$H_0: \text{both models are equally far from the "true" model}$$
+versus:
+$$H_a: \text{one of the models is closer to the "true" model}$$
+Unfortunately, and as Gabby and I discussed, this test cannot make any decision about whether the closer distribution is the "true" distribution. Said another way, if this test is significant, it does not mean that one model is a "good" fit, only that it is better than the other model. In any case, the $p$-value of 0.87 suggests that both models perform equally well, a hardly surprising result given the AIC values.
+
+All of what we have said here is affirmed by the plot of the five model fits below. It appears sensible to continue to work with the (simple?) power-law distribution for this particular population network. At its worst, out in the right tail, the difference between the observed versus fitted relative frequency is roughly 0.001. To me, this is practically meaningless for our purposes. 
+
+```{r 19, echo=FALSE, fig.align='center', fig.height=6, fig.width=6, warning=FALSE}
+xmin <-  1 
+## Careful; pdfs below will not necessarily sum to 1 on this domain
+
+temp19 <- temp01 %>% 
+  mutate(`Power Law` = dpldis(size, xmin, 2.748148),
+         Poisson = dist_pdf(m02, size),
+         `Disc logN` = dist_pdf(m03, size),
+         `Disc Exp` = dist_pdf(m04, size),
+         `Yule-Simon` = dyules(size, 3.15082)) %>% 
+  pivot_longer(cols = 4:8, names_to = "Model", values_to = "Pred Rel Freq")
+
+## Sidebar; be careful; Clauset et al., (2009), Table 2.1
+# m02
+# unique(dist_pdf(m02, temp01$size)) ## Yes
+# dpois(temp01$size, 0.89854) ## No
+# ((1/(exp(0.89854) - 1))*(0.89854^(temp01$size)))/factorial(temp01$size) ## Yes
+
+temp19 %>%
+  ggplot(aes(x = size, y = `Pred Rel Freq`, group = Model)) +
+  geom_point(aes(y = rel_freq)) +
+  geom_line(aes(color = Model, linetype = Model)) +
+  coord_cartesian(ylim = c(0.0001, NA)) +
+  scale_x_log10() + 
+  scale_y_log10() + 
+  labs(title = "Distribution of Component Sizes for Network", 
+       subtitle = "Log_10 Scale for Both Axes; With Fitted Models and Observed Data", x = "Component Size", y = "Relative Frequency") 
+```
+
+### Part 4: Examining 1,000 Samples from Network at Sampling Fractions 0.90, 0.50, and 0.20
+
+We take 1,000 samples from the population network with sampling fractions $f$ = 0.90 ($n = 1,132$), 0.50 ($n = 629$), and 0.20 ($n = 252$) and repeat a few approaches described previously. In addition, we add a few new approaches. It should be noted that all of this can best be accomplished through high-performance computing; doing this on a desktop will take many hours.
+
+If you have two nodes that were unconnected before with respect to genetic similarity, then that relationship would not change just because those two nodes were selected into a sample. Furthermore, it becomes increasingly unlikely to sample entire larger components from the population as the sampling fraction decreases. Therefore, we would anticipate in advance that we will increasingly trim the right tail of the distribution of component sizes.
+
+```{r 20, include = FALSE}
+# temp20 <- read_csv("https://raw.githubusercontent.com/carnegien/BayesNet/dev_gabby/Paper8/comp_dist/props1000/df_90-comp_dist-1000.csv", col_names = c("size", "sim", "freq"), skip = 1)
+# write.csv(temp20, file = "/Users/pturk02/Dropbox/Atrium/Projects/Carnegie, Nicole/Lemire_Gabrielle/Data/df_90-comp_dist-1000.csv", row.names = FALSE)
+
+temp20 <- read_csv("/Users/pturk02/Dropbox/Atrium/Projects/Carnegie_Nicole/Lemire_Gabrielle/Data/df_90-comp_dist-1000.csv")
+
+temp20 <- temp20 %>% relocate(sim)
+temp20$sim <- sub(".", "", temp20$sim)
+temp20$sim <- as.factor(temp20$sim)
+temp20$sim <- reorder(temp20$sim, rep(1:1000, each = 23))
+temp20_with0 <- temp20 %>% group_by(sim) %>% mutate(rel_freq = freq/sum(freq))
+temp20 <- temp20 %>% filter(!freq == 0)
+temp20 <- temp20 %>% group_by(sim) %>% mutate(rel_freq = freq/sum(freq))
+
+# check <- temp20 %>% group_by(sim) %>% summarize(tot_prods = sum(size*freq)) ## All sims give 1,132
+
+temp20_plus_pop <- rbind(temp01_pop, temp20) %>% mutate(Type = if_else(sim == "Pop", "Pop", "Samp"))
+
+temp20a <- tibble(sim = rep(temp20$sim, temp20$freq), size = rep(temp20$size, temp20$freq))
+temp20a <- temp20a %>% group_by(sim) %>% arrange(desc(size), .by_group = TRUE) %>% mutate(total = 1132)
+```
+
+```{r 21, include=FALSE}
+# temp21_holder <- matrix(NA, nrow = 1000, ncol = 3)
+#
+# ptm <- proc.time()
+# for(i in 1:1000){
+# temp21 <- temp20a %>% filter(sim == as.character(i))
+#
+# pl_size21 <- displ$new(temp21$size)
+# est_size_pl21 <- estimate_xmin(pl_size21)
+# temp21_holder[i, 1] <- est_size_pl21$xmin
+# temp21_holder[i, 2] <- est_size_pl21$pars
+# bs_size_p21 <- bootstrap_p(pl_size21, no_of_sims = 3000, threads = 6, seed = 20210712)
+# temp21_holder[i, 3] <- bs_size_p21$p
+# cat("iteration = ", i, "\n")
+# }
+# proc.time() - ptm
+#
+# temp21_holder
+
+## Save a single object to a file
+# saveRDS(temp21_holder, "Data/90sims.rds")
+## Read it back in
+temp21_holder <- readRDS("Data/90sims.rds")
+hist(temp21_holder[,2])
+hist(temp21_holder[,3])
+```
+
+For the $f$ = 0.90 case, $s_{\rm min}$ was estimated to be 1 for all samples. We see that on average, a sample returns a slightly higher estimate of the shape parameter $\alpha$ (2.80) than the one estimated for the population (2.75). But what is the practical effect of this? The answer is "hardly anything". The greatest disparity between the population and a typical sample with respect to the probability mass function is when the component size is 1. Specifically, the probability the component size is 1 for the population is 0.7940, while it is 0.8012 for the typical sample.  
+
+```{r 22,  echo=FALSE, fig.align='center', message=FALSE}
+temp22 <- as_tibble(temp21_holder, .name_repair = ~ c("x_min", "alpha", "p_val"))
+
+ggplot(temp22, aes(alpha)) +
+  geom_histogram(show.legend = FALSE) + labs(x = expression(hat(alpha)), y = "Frequency") +
+  labs(title = expression("Distribution of" ~hat(alpha)~ "for Network Samples ("*italic(f)~ "= 0.90)"),
+       subtitle = expression("Green Dotted Line is Population" ~hat(alpha)* "; Red Dotted Line is Mean" ~hat(alpha)~ "Across 1,000 Samples"), caption = "Blue Solid Lines are 0.025 and 0.975 Quantiles") +
+  geom_vline(xintercept = 2.748148, linetype = "dotted", color = "green", size = 1.5) +
+  geom_vline(xintercept = mean(temp22$alpha), linetype = "dotted", color = "red", size = 1.5) +
+  geom_vline(xintercept = quantile(temp22$alpha, p = 0.025), linetype = "solid", color = "blue", size = 0.5) +
+  geom_vline(xintercept = quantile(temp22$alpha, p = 0.975), linetype = "solid", color = "blue", size = 0.5) +
+  theme(plot.caption = element_text(hjust = 0))
+
+# cbind(dpldis(x, xmin = 1, 2.748148), dpldis(x, xmin = 1, mean(temp22$alpha)),
+#       dpldis(x, xmin = 1, 2.748148) - dpldis(x, xmin = 1, mean(temp22$alpha)))
+
+# var(temp22$alpha) + (mean(temp22$alpha) - 2.7481485)^2 ## 0.002686186
+
+# mean(temp21_holder[,2]/(temp21_holder[,2] - 1)) ## 1.56
+# temp20 %>% group_by(sim) %>% transmute(terms = size*rel_freq) %>% summarize(sim_sum = sum(terms)) %>% summarize(mean(sim_sum)) ## 1.48
+# temp01 %>% transmute(terms = size*rel_freq) %>% summarize(sim_sum = sum(terms)) ## 1.52
+```
+
+The mean of the power law distribution is:
+$$\frac{\alpha - 1}{\alpha - 2}$$
+Hence, by the invariance property of MLEs, we can estimate the mean for each sample and then take the grand mean to get a sense of what the average-sized component is. Our answer here is 1.56. In reality, if we directly compute the grand mean for our 1,000 samples, we get 1.48, and the actual mean for the population network is 1.52.
+
+By taking the variance of the $\hat{\alpha}$ for our 1,000 samples (0.00044) and adding the square of the approximate "bias" $\left(\overline{\hat{\alpha}} - \hat{\alpha}_{pop}\right)$ (0.00224), we can obtain an MSE-type of statistic equal to 0.0027.  
+
+Next, we examine the frequency distribution for the $p$-values from the bootstrap test for power law goodness-of-fit conducted on each of the 1,000 samples. All the $p$-values are above 0.05 (the green line), but there is considerable variation among tests.
+
+```{r 23, echo=FALSE, fig.align='center', message=FALSE}
+ggplot(temp22, aes(p_val)) +
+  geom_histogram(show.legend = FALSE) + labs(x = expression(italic(p)* "-Value"), y = "Frequency") +
+  labs(title = expression("Distribution of GOF" ~italic(p)* "-Values for Network Samples ("*italic(f)~ "= 0.90)"), subtitle = "Across 1,000 Samples; Green Line is 0.05") +
+  geom_vline(xintercept = 0.05, linetype = "dotted", color = "green", size = 1.5)
+```
+
+The table below shows the count of the 1,000 samples where at least one of the given component sizes (size) was observed. Once again, it also shows if at least one component of the given size was ever observed in the population (In pop?). It is interesting to see some of the differences at the sample level versus the population. For example, more often than not, we will observe a component of size 10 or 19 in our sample, but do not observe components of these sizes in the population. In only 89 out of 1,000 samples do we observe the largest component realized in the population (size of 23). 
+
+```{r 24, echo=FALSE}
+temp24 <- temp20 %>% group_by(size) %>% summarize(n = n())
+temp24 <- temp24 %>% mutate(`In pop?` = if_else(size %in% temp01$size, "Yes", "No"))
+t(temp24) %>% kbl(caption = "Count of 1,000 Samples With One or More Components of Given Size") %>%
+  column_spec(1:24, border_left = T, border_right = T) %>% kable_classic(full_width = F) %>%
+  kable_styling(latex_options = c("scale_down", "hold_position"))
+```
+
+The plot below shows the distribution of component sizes with our simulation envelope as detailed in Part 2. We see the estimated power law, the observed relative frequency from the population, and the median relative frequency across the 1,000 samples are congruent. The sum of the squared deviations between the later two is only 0.00012. No surprise here; our sample fraction of 0.90 is quite large. Any differences we see between the population and the samples are minor and exaggerated by the $\log_{10}$ scale. For example, looking at the "difference" for the component size of 10, the median relative frequency is only 0.00129. Perhaps we should remove the the $\log_{10}$ scale for the $y$-axis to show this in another light.
+
+```{r 25, echo=FALSE, fig.align='center', warning=FALSE}
+temp25 <- temp20_with0 %>% group_by(size) %>%
+  summarize(max = max(rel_freq),
+            upper = quantile(rel_freq, p = 0.975),
+            min = min(rel_freq),
+            lower = quantile(rel_freq, p = 0.025),
+            med = median(rel_freq))
+poly25 <- tibble(Size = c(temp25$size, rev(temp25$size)), Bounds = c(temp25$upper, rev(temp25$lower)))
+
+temp20_with0 %>%
+  ggplot(aes(size, rel_freq)) +
+  geom_line(data = temp25, aes(x = size, y = med), colour = "red") +
+  geom_line(data = temp09b, aes(x = size, y = pred_rel_freq), colour = "green") +
+  geom_line(data = temp09, aes(x = size, y = rel_freq), linetype = "dashed", colour = "blue") +
+  geom_polygon(data = poly25, aes(x = Size, y = Bounds), fill = "#00BFC4", alpha = 0.4) +
+  scale_x_log10() +
+  scale_y_log10() +
+  labs(title = expression("Distribution of Component Size for Network Samples ("*italic(f)~ "= 0.90)"),
+       subtitle = "Log_10 Scale for Both Axes; Red Line is Median Rel Freq Across 1,000 Samples;
+Teal Band is 95% Simulation Envelope; Blue Dashed Line is Population
+Green Line is Fitted Power Law Model for Population", x = "Component Size", y = "Relative Frequency")
+```
+
+```{r 25b, echo=FALSE, fig.align='center', message=FALSE}
+temp20_with0 %>%
+  ggplot(aes(size, rel_freq)) +
+  geom_line(data = temp25, aes(x = size, y = med), colour = "red") +
+  geom_line(data = temp09b, aes(x = size, y = pred_rel_freq), colour = "green") +
+  geom_line(data = temp09b, aes(x = size, y = rel_freq), linetype = "dashed", colour = "blue") +
+  geom_polygon(data = poly25, aes(x = Size, y = Bounds), fill = "#00BFC4", alpha = 0.4) +
+  scale_x_log10() +
+  labs(title = expression("Distribution of Component Size for Network Samples ("*italic(f)~ "= 0.90)"),
+       subtitle = "Log_10 Scale for Only X-Axis; Red Line is Median Rel Freq Across 1,000 Samples;
+Teal Band is 95% Simulation Envelope; Blue Dashed Line is Population
+Green Line is Fitted Power Law Model for Population", x = "Component Size", y = "Relative Frequency")
+```
+
+```{r 26, eval=FALSE, include=FALSE}
+# cbind(temp25$med, temp09b$rel_freq)
+sum((temp25$med - temp09b$rel_freq)^2) ## 0.00012
+```
+
+```{r 27, include = FALSE}
+# temp27 <- read_csv("https://raw.githubusercontent.com/carnegien/BayesNet/dev_gabby/Paper8/comp_dist/props1000/df_50-comp_dist-1000.csv", col_names = c("size", "sim", "freq"), skip = 1)
+# write.csv(temp27, file = "/Users/pturk02/Dropbox/Atrium/Projects/Carnegie, Nicole/Lemire_Gabrielle/Data/df_50-comp_dist-1000.csv", row.names = FALSE)
+
+temp27 <- read_csv("/Users/pturk02/Dropbox/Atrium/Projects/Carnegie_Nicole/Lemire_Gabrielle/Data/df_50-comp_dist-1000.csv")
+
+temp27 <- temp27 %>% relocate(sim)
+temp27$sim <- sub(".", "", temp27$sim)
+temp27$sim <- as.factor(temp27$sim)
+temp27$sim <- reorder(temp27$sim, rep(1:1000, each = 23))
+temp27_with0 <- temp27
+temp27_with0 <- temp27_with0 %>% group_by(sim) %>% mutate(rel_freq = freq/sum(freq))
+temp27 <- temp27 %>% filter(!freq == 0)
+temp27 <- temp27 %>% group_by(sim) %>% mutate(rel_freq = freq/sum(freq))
+
+# check <- temp27 %>% group_by(sim) %>% summarize(tot_prods = sum(size*freq)) ## All sims give 629
+
+temp27_plus_pop <- rbind(temp01_pop, temp27) %>% mutate(Type = if_else(sim == "Pop", "Pop", "Samp"))
+
+temp27a <- tibble(sim = rep(temp27$sim, temp27$freq), size = rep(temp27$size, temp27$freq))
+temp27a <- temp27a %>% group_by(sim) %>% arrange(desc(size), .by_group = TRUE) %>% mutate(total = 629)
+```
+
+```{r 28, include=FALSE, message=FALSE}
+# temp28_holder <- matrix(NA, nrow = 1000, ncol = 3)
+#
+# ptm <- proc.time()
+# for(i in 1:1000){
+# temp28 <- temp27a %>% filter(sim == as.character(i))
+#
+# pl_size28 <- displ$new(temp28$size)
+# est_size_pl28 <- estimate_xmin(pl_size28)
+# temp28_holder[i, 1] <- est_size_pl28$xmin
+# temp28_holder[i, 2] <- est_size_pl28$pars
+# bs_size_p28 <- bootstrap_p(pl_size28, no_of_sims = 3000, threads = 6, seed = 20210712)
+# temp28_holder[i, 3] <- bs_size_p28$p
+# cat("iteration = ", i, "\n")
+# }
+# proc.time() - ptm
+#
+# temp28_holder
+
+## Save a single object to a file
+# saveRDS(temp28_holder, "Data/50sims.rds")
+## Read it back in
+temp28_holder <- readRDS("Data/50sims.rds")
+hist(temp28_holder[,2])
+hist(temp28_holder[,3])
+```
+
+For the $f$ = 0.50 case, $s_{\rm min}$ was estimated to be 1 for all samples. We see that on average, a sample is starting to return a more meaningfully higher (biased) estimate of the shape parameter $\alpha$ (3.10) than the one estimated for the population (2.75). The greatest disparity between the population and a typical sample with respect to the probability mass function is when the component size is 1. Specifically, the probability the component size is 1 for the population is 0.7940, while it is 0.8447 for the typical sample. Certainly, this is more pronounced difference than the $f$ = 0.90 case.
+
+```{r 29, echo=FALSE, fig.align='center', message=FALSE}
+temp29 <- as_tibble(temp28_holder, .name_repair = ~ c("x_min", "alpha", "p_val"))
+
+ggplot(temp29, aes(alpha)) +
+  geom_histogram(show.legend = FALSE) + labs(x = expression(hat(alpha)), y = "Frequency") +
+  labs(title = expression("Distribution of" ~hat(alpha)~ "for Network Samples ("*italic(f)~ "= 0.50)"),
+       subtitle = expression("Green Dotted Line is Population" ~hat(alpha)* "; Red Dotted Line is Mean" ~hat(alpha)~ "Across 1,000 Samples"), caption = "Blue Solid Lines are 0.025 and 0.975 Quantiles") +
+  geom_vline(xintercept = 2.748148, linetype = "dotted", color = "green", size = 1.5) +
+  geom_vline(xintercept = mean(temp29$alpha), linetype = "dotted", color = "red", size = 1.5) +
+  geom_vline(xintercept = quantile(temp29$alpha, p = 0.025), linetype = "solid", color = "blue", size = 0.5) +
+  geom_vline(xintercept = quantile(temp29$alpha, p = 0.975), linetype = "solid", color = "blue", size = 0.5) +
+  theme(plot.caption = element_text(hjust = 0))
+
+# cbind(dpldis(x, xmin = 1, 2.748148), dpldis(x, xmin = 1, mean(temp29$alpha)),
+#       dpldis(x, xmin = 1, 2.748148) - dpldis(x, xmin = 1, mean(temp29$alpha)))
+
+# var(temp29$alpha) + (mean(temp29$alpha) - 2.7481485)^2 ## 0.1265
+
+# mean(temp28_holder[,2]/(temp28_holder[,2] - 1)) ## 1.48
+# temp27 %>% group_by(sim) %>% transmute(terms = size*rel_freq) %>% summarize(sim_sum = sum(terms)) %>% summarize(mean(sim_sum)) ## 1.31
+# temp01 %>% transmute(terms = size*rel_freq) %>% summarize(sim_sum = sum(terms)) ## 1.52
+```
+
+If we estimate the mean component size for each sample using $\hat{\alpha}$ and then take the grand mean, our answer here is 1.48. In reality, if we directly compute the grand mean for our 1,000 samples, we get 1.31, and the actual mean for the population network is 1.52.
+
+By taking the variance of the $\hat{\alpha}$ for our 1,000 samples (0.00472) and adding the square of the approximate "bias" $\left(\overline{\hat{\alpha}} - \hat{\alpha}_{pop}\right)$ (0.12176), we can obtain an MSE-type of statistic equal to 0.1265.   
+
+Next, we examine the frequency distribution for the $p$-values from the bootstrap test for power law goodness-of-fit conducted on each of the 1,000 samples. We now observe 19 $p$-values at or below 0.05 (the green line).
+
+```{r 30, echo=FALSE, fig.align='center', message=FALSE}
+ggplot(temp29, aes(p_val)) +
+  geom_histogram(show.legend = FALSE) + labs(x = expression(italic(p)* "-Value"), y = "Frequency") +
+  labs(title = expression("Distribution of GOF" ~italic(p)* "-Values for Network Samples ("*italic(f)~ "= 0.50)"), subtitle = "Across 1,000 Samples; Green Line is 0.05") +
+  geom_vline(xintercept = 0.05, linetype = "dotted", color = "green", size = 1.5)
+
+# temp29 %>% filter(p_val <= 0.05) %>% count() ## 19/1000
+```
+
+The table below shows the count of the 1,000 samples where at least one of the given component sizes (size) was observed. Once again, it also shows if at least one component of the given size was ever observed in the population (In pop?). Compared to the previous $f$ = 0.90 case, we are clearly starting to chip away at the right tail.
+
+```{r 31, echo=FALSE, fig.align='center', message=FALSE}
+temp31 <- temp27 %>% group_by(size) %>% summarize(n = n())
+temp31 <- rbind(temp31, tibble(size = 20:23, n = 0))
+temp31 <- temp31 %>% mutate(`In pop?` = if_else(size %in% temp01$size, "Yes", "No"))
+t(temp31) %>% kbl(caption = "Count of 1,000 Samples With One or More Components of Given Size") %>%
+  column_spec(1:24, border_left = T, border_right = T) %>% kable_classic(full_width = F) %>%
+  kable_styling(latex_options = c("scale_down", "hold_position"))
+```
+
+The plot below shows the distribution of component sizes with our simulation envelope as detailed in Part 2. We now see some minor differences appearing between the observed relative frequency from the population and the median relative frequency across the 1,000 samples. The sum of the squared deviations between the later two is now 0.0036. We remove the the $\log_{10}$ scale for the $y$-axis to show this in another light.
+
+```{r 32, echo=FALSE, fig.align='center', warning=FALSE}
+temp32 <- temp27_with0 %>% group_by(size) %>%
+  summarize(max = max(rel_freq),
+            upper = quantile(rel_freq, p = 0.975),
+            min = min(rel_freq),
+            lower = quantile(rel_freq, p = 0.025),
+            med = median(rel_freq))
+poly32 <- tibble(Size = c(temp32$size, rev(temp32$size)), Bounds = c(temp32$upper, rev(temp32$lower)))
+
+temp27_with0 %>%
+  ggplot(aes(size, rel_freq)) +
+  geom_line(data = temp32, aes(x = size, y = med), colour = "red") +
+  geom_line(data = temp09b, aes(x = size, y = pred_rel_freq), colour = "green") +
+  geom_line(data = temp09b, aes(x = size, y = rel_freq), linetype = "dashed", colour = "blue") +
+  geom_polygon(data = poly32, aes(x = Size, y = Bounds), fill = "#00BFC4", alpha = 0.4) +
+  scale_x_log10() +
+  scale_y_log10() +
+  labs(title = expression("Distribution of Component Size for Network Samples ("*italic(f)~ "= 0.50)"),
+       subtitle = "Log_10 Scale for Both Axes; Red Line is Median Rel Freq Across 1,000 Samples;
+Teal Band is 95% Simulation Envelope; Blue Dashed Line is Population
+Green Line is Fitted Power Law Model for Population", x = "Component Size", y = "Relative Frequency")
+```
+
+```{r 32b, echo=FALSE, fig.align='center', warning=FALSE}
+temp27_with0 %>%
+  ggplot(aes(size, rel_freq)) +
+  geom_line(data = temp32, aes(x = size, y = med), colour = "red") +
+  geom_line(data = temp09b, aes(x = size, y = pred_rel_freq), colour = "green") +
+  geom_line(data = temp09b, aes(x = size, y = rel_freq), linetype = "dashed", colour = "blue") +
+  geom_polygon(data = poly32, aes(x = Size, y = Bounds), fill = "#00BFC4", alpha = 0.4) +
+  scale_x_log10() +
+  labs(title = expression("Distribution of Component Size for Network Samples ("*italic(f)~ "= 0.50)"),
+       subtitle = "Log_10 Scale for Both Axes; Red Line is Median Rel Freq Across 1,000 Samples;
+Teal Band is 95% Simulation Envelope; Blue Dashed Line is Population
+Green Line is Fitted Power Law Model for Population", x = "Component Size", y = "Relative Frequency")
+```
+
+```{r 33, eval=FALSE, include=FALSE}
+# cbind(temp32$med, temp09b$rel_freq)
+sum((temp32$med - temp09b$rel_freq)^2) ## 0.0036
+```
+
+```{r 34, include = FALSE}
+# temp34 <- read_csv("https://raw.githubusercontent.com/carnegien/BayesNet/dev_gabby/Paper8/comp_dist/props1000/df_20-comp_dist-1000.csv", col_names = c("size", "sim", "freq"), skip = 1)
+# write.csv(temp34, file = "/Users/pturk02/Dropbox/Atrium/Projects/Carnegie, Nicole/Lemire_Gabrielle/Data/df_20-comp_dist-1000.csv", row.names = FALSE)
+
+temp34 <- read_csv("/Users/pturk02/Dropbox/Atrium/Projects/Carnegie_Nicole/Lemire_Gabrielle/Data/df_20-comp_dist-1000.csv")
+
+temp34 <- temp34 %>% relocate(sim)
+temp34$sim <- sub(".", "", temp34$sim)
+temp34$sim <- as.factor(temp34$sim)
+temp34$sim <- reorder(temp34$sim, rep(1:1000, each = 23))
+temp34_with0 <- temp34
+temp34_with0 <- temp34_with0 %>% group_by(sim) %>% mutate(rel_freq = freq/sum(freq))
+temp34 <- temp34 %>% filter(!freq == 0)
+temp34 <- temp34 %>% group_by(sim) %>% mutate(rel_freq = freq/sum(freq))
+
+# check <- temp34 %>% group_by(sim) %>% summarize(tot_prods = sum(size*freq)) ## All sims give 252
+
+temp34_plus_pop <- rbind(temp01_pop, temp34) %>% mutate(Type = if_else(sim == "Pop", "Pop", "Samp"))
+
+temp34a <- tibble(sim = rep(temp34$sim, temp34$freq), size = rep(temp34$size, temp34$freq))
+temp34a <- temp34a %>% group_by(sim) %>% arrange(desc(size), .by_group = TRUE) %>% mutate(total = 252)
+```
+
+```{r 35, include=FALSE, message=FALSE}
+# temp35_holder <- matrix(NA, nrow = 1000, ncol = 3)
+# 
+# ptm <- proc.time()
+# for(i in 1:1000){
+# temp35 <- temp34a %>% filter(sim == as.character(i))
+# 
+# pl_size35 <- displ$new(temp35$size)
+# est_size_pl35 <- estimate_xmin(pl_size35)
+# temp35_holder[i, 1] <- est_size_pl35$xmin
+# temp35_holder[i, 2] <- est_size_pl35$pars
+# bs_size_p35 <- bootstrap_p(pl_size35, no_of_sims = 3000, threads = 6, seed = 20210712)
+# temp35_holder[i, 3] <- bs_size_p35$p
+# cat("iteration = ", i, "\n")
+# }
+# proc.time() - ptm
+
+# temp35_holder
+
+## Save a single object to a file
+# saveRDS(temp35_holder, "Data/20sims.rds")
+## Read it back in
+temp35_holder <- readRDS("Data/20sims.rds")
+hist(temp35_holder[,2])
+hist(temp35_holder[,3])
+```
+
+For the $f$ = 0.20 case, $s_{\rm min}$ was estimated to be 1 for 996 samples, and 2 for 4 samples. In hindsight, I should have fixed $s_{\rm min}$ to be 1 for all the samples, but we ignore this minor annoyance for now. 
+
+We see that on average, a sample now appears to return a substantially (biased) estimate of the shape parameter $\alpha$ (3.73) compared to what we observe estimating $\alpha$ for the population (2.75). The greatest disparity between the population and a typical sample with respect to the probability mass function is when the component size is 1. Specifically, the probability the component size is 1 for the population is 0.7940, while it has now climbed to 0.9062 for the typical sample. To me, this is a difference that could not be ignored. 
+
+It is worth noting the appearance of relatively large values of $\hat{\alpha}$.  
+
+```{r 36, echo=FALSE, fig.align='center', message=FALSE}
+temp36 <- as_tibble(temp35_holder, .name_repair = ~ c("x_min", "alpha", "p_val"))
+
+ggplot(temp36, aes(alpha)) +
+  geom_histogram(show.legend = FALSE) + labs(x = expression(hat(alpha)), y = "Frequency") +
+  labs(title = expression("Distribution of" ~hat(alpha)~ "for Network Samples ("*italic(f)~ "= 0.20)"),
+       subtitle = expression("Green Dotted Line is Population" ~hat(alpha)* "; Red Dotted Line is Mean" ~hat(alpha)~ "Across 1,000 Samples"), caption = "Blue Solid Lines are 0.025 and 0.975 Quantiles") +
+  geom_vline(xintercept = 2.748148, linetype = "dotted", color = "green", size = 1.5) +
+  geom_vline(xintercept = mean(temp36$alpha), linetype = "dotted", color = "red", size = 1.5) +
+  geom_vline(xintercept = quantile(temp36$alpha, p = 0.025), linetype = "solid", color = "blue", size = 0.5) +
+  geom_vline(xintercept = quantile(temp36$alpha, p = 0.975), linetype = "solid", color = "blue", size = 0.5) +
+  theme(plot.caption = element_text(hjust = 0))
+
+# cbind(dpldis(x, xmin = 1, 2.748148), dpldis(x, xmin = 1, mean(temp36$alpha)),
+#       dpldis(x, xmin = 1, 2.748148) - dpldis(x, xmin = 1, mean(temp36$alpha)))
+
+# var(temp36$alpha) + (mean(temp36$alpha) - 2.7481485)^2 ## 1.0120
+
+# mean(temp35_holder[,2]/(temp35_holder[,2] - 1)) ## 1.37
+# temp34 %>% group_by(sim) %>% transmute(terms = size*rel_freq) %>% summarize(sim_sum = sum(terms)) %>% summarize(mean(sim_sum)) ## 1.14
+# temp01 %>% transmute(terms = size*rel_freq) %>% summarize(sim_sum = sum(terms)) ## 1.52
+```
+
+If we estimate the mean component size for each sample using $\hat{\alpha}$ and then take the grand mean, our answer here is 1.37. In reality, if we directly compute the grand mean for our 1,000 samples, we get 1.14, and the actual mean for the population network is 1.52.
+
+*Conclusion: The sampling fraction had little appreciable effect on estimating mean component size.*
+
+By taking the variance of the $\hat{\alpha}$ for our 1,000 samples (0.04683) and adding the square of the approximate "bias" $\left(\overline{\hat{\alpha}} - \hat{\alpha}_{pop}\right)$ (0.96513), we can obtain an MSE-type of statistic equal to 1.0120.
+
+*Conclusion: What is driving the increase in our 'MSE'? Moving from sampling fractions $f$ = 0.90 to 0.50 to 0.20, the sample variance of $\hat{\alpha}$ went from 0.00044 to 0.00472 to 0.04683. However, more dramatically, the squared bias went from 0.00224 to 0.12176 to 0.96513.*
+
+Next, we examine the frequency distribution for the $p$-values from the bootstrap test for power law goodness-of-fit conducted on each of the 1,000 samples. We now observe 23 $p$-values at or below 0.05 (the green line). 
+
+*Conclusion: With decreasing sampling fraction $f$, I thought the GOF tests would suffer much more than they did, but they did not. For the record, the 23 small $p$-values do NOT associate with large estimates of $\alpha$.*
+
+```{r 37, echo=FALSE, fig.align='center', message=FALSE}
+ggplot(temp36, aes(p_val)) +
+  geom_histogram(show.legend = FALSE) + labs(x = expression(italic(p)* "-Value"), y = "Frequency") +
+  labs(title = expression("Distribution of GOF" ~italic(p)* "-Values for Network Samples ("*italic(f)~ "= 0.20)"), subtitle = "Across 1,000 Samples; Green Line is 0.05") +
+  geom_vline(xintercept = 0.05, linetype = "dotted", color = "green", size = 1.5)
+
+# temp36 %>% filter(p_val <= 0.05) %>% count() ## 23/1000
+```
+
+The table below shows the count of the 1,000 samples where at least one of the given component sizes (size) was observed. Once again, it also shows if at least one component of the given size was ever observed in the population (In pop?). The right tail is now very much undermined. Only one sample had the largest observed component size of 11.
+
+*Conclusion: We lose the right tail with decreasing sampling fraction $f$* 
+
+```{r 38, echo=FALSE}
+temp38 <- temp34 %>% group_by(size) %>% summarize(n = n())
+temp38 <- rbind(temp38, tibble(size = 12:23, n = 0))
+temp38 <- temp38 %>% mutate(`In pop?` = if_else(size %in% temp01$size, "Yes", "No"))
+t(temp38) %>% kbl(caption = "Count of 1,000 Samples With One or More Components of Given Size") %>%
+  column_spec(1:24, border_left = T, border_right = T) %>% kable_classic(full_width = F) %>%
+  kable_styling(latex_options = c("scale_down", "hold_position"))
+```
+
+The plot below shows the distribution of component sizes with our simulation envelope as detailed in Part 2. We now see a substantial difference appearing between the observed relative frequency from the population and the median relative frequency across the 1,000 samples. The sum of the squared deviations between the later two has now increased to 0.0156. We remove the the $\log_{10}$ scale for the $y$-axis to show this in another light.
+
+```{r 39, echo=FALSE, fig.align='center', warning=FALSE}
+temp39 <- temp34_with0 %>% group_by(size) %>%
+  summarize(max = max(rel_freq),
+            upper = quantile(rel_freq, p = 0.975),
+            min = min(rel_freq),
+            lower = quantile(rel_freq, p = 0.025),
+            med = median(rel_freq))
+poly39 <- tibble(Size = c(temp39$size, rev(temp39$size)), Bounds = c(temp39$upper, rev(temp39$lower)))
+
+temp34_with0 %>%
+  ggplot(aes(size, rel_freq)) +
+  geom_line(data = temp39, aes(x = size, y = med), colour = "red") +
+  geom_line(data = temp09b, aes(x = size, y = pred_rel_freq), colour = "green") +
+  geom_line(data = temp09b, aes(x = size, y = rel_freq), linetype = "dashed", colour = "blue") +
+  geom_polygon(data = poly39, aes(x = Size, y = Bounds), fill = "#00BFC4", alpha = 0.4) +
+  scale_x_log10() +
+  scale_y_log10() +
+  labs(title = expression("Distribution of Component Size for Network Samples ("*italic(f)~ "= 0.20)"),
+       subtitle = "Log_10 Scale for Both Axes; Red Line is Median Rel Freq Across 1,000 Samples;
+Teal Band is 95% Simulation Envelope; Blue Dashed Line is Population
+Green Line is Fitted Power Law Model for Population", x = "Component Size", y = "Relative Frequency")
+```
+
+```{r 39b, echo=FALSE, fig.align='center', warning=FALSE}
+temp34_with0 %>%
+  ggplot(aes(size, rel_freq)) +
+  geom_line(data = temp39, aes(x = size, y = med), colour = "red") +
+  geom_line(data = temp09b, aes(x = size, y = pred_rel_freq), colour = "green") +
+  geom_line(data = temp09b, aes(x = size, y = rel_freq), linetype = "dashed", colour = "blue") +
+  geom_polygon(data = poly39, aes(x = Size, y = Bounds), fill = "#00BFC4", alpha = 0.4) +
+  scale_x_log10() +
+  labs(title = expression("Distribution of Component Size for Network Samples ("*italic(f)~ "= 0.20)"),
+       subtitle = "Log_10 Scale for Both Axes; Red Line is Median Rel Freq Across 1,000 Samples;
+Teal Band is 95% Simulation Envelope; Blue Dashed Line is Population
+Green Line is Fitted Power Law Model for Population", x = "Component Size", y = "Relative Frequency")
+```
+
+```{r 40, eval=FALSE, include=FALSE}
+# cbind(temp39$med, temp09b$rel_freq)
+sum((temp39$med - temp09b$rel_freq)^2) ## 0.0156
+```
+
+*Conclusion: Taking a sample of 20% of the nodes from the population, looking at genetic similarity, and the resulting observed component sizes in the sample, would not be an adequate representation of the unobserved component sizes in the population.*  
+
+## Part 5: Effect of Sampling Fraction $f$ on Fitting Discrete Power Law Model to Component Size
+
+In this section, we use the same approaches as described previously. For a sequence of sampling fractions $f \in \{0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90\}$, we repeat the process of fitting the discrete power law model on component size for 1,000 samples at each $f$. Next, with respect to $\widehat{\alpha}$, we extract the mean and the 0.025 and 0.975 quantiles (see red line and teal band in plot below). This is compared to $\widehat{\alpha}$ and its 95% confidence interval obtained from fitting the power law model to the entire population network (see green lines in plot below). This whole process is quite computationally expensive.    
+
+```{r 41, echo=FALSE, fig.align='center', warning=FALSE}
+temp41_20 <- as_tibble(readRDS("Data/20sims.rds"))
+temp41_20 <- temp41_20 %>% mutate(f = 20)
+temp41_30 <- as_tibble(readRDS("Data/30sims.rds"))
+temp41_30 <- temp41_30 %>% mutate(f = 30)
+temp41_40 <- as_tibble(readRDS("Data/40sims.rds"))
+temp41_40 <- temp41_40 %>% mutate(f = 40)
+temp41_50 <- as_tibble(readRDS("Data/50sims.rds"))
+temp41_50 <- temp41_50 %>% mutate(f = 50)
+temp41_60 <- as_tibble(readRDS("Data/60sims.rds"))
+temp41_60 <- temp41_60 %>% mutate(f = 60)
+temp41_70 <- as_tibble(readRDS("Data/70sims.rds"))
+temp41_70 <- temp41_70 %>% mutate(f = 70)
+temp41_80 <- as_tibble(readRDS("Data/80sims.rds"))
+temp41_80 <- temp41_80 %>% mutate(f = 80)
+temp41_90 <- as_tibble(readRDS("Data/90sims.rds"))
+temp41_90 <- temp41_90 %>% mutate(f = 90)
+
+temp41_all <- rbind(temp41_20, temp41_30, temp41_40,
+                    temp41_50, temp41_60, temp41_70,
+                    temp41_80, temp41_90)
+
+temp41_stats <- temp41_all %>% group_by(f) %>% 
+  summarize(mean_alpha = mean(V2),
+            upper = quantile(V2, p = 0.975),
+            lower = quantile(V2, p = 0.025))
+poly41 <- tibble(f = c(temp41_stats$f, rev(temp41_stats$f)), 
+                 Bounds = c(temp41_stats$upper, rev(temp41_stats$lower)))
+
+temp41_stats %>%
+  ggplot(aes(f, mean_alpha)) +
+  geom_line(aes(x = f, y = mean_alpha), colour = "red") +
+  geom_line(aes(x = f, y = 2.75), colour = "green") +
+  geom_line(aes(x = f, y = 2.62), colour = "green", linetype = 2) +
+  geom_line(aes(x = f, y = 2.91), colour = "green", linetype = 2) +
+  geom_polygon(data = poly41, aes(x = f, y = Bounds), fill = "#00BFC4", alpha = 0.4) +
+  geom_point() +
+  scale_x_continuous(breaks = seq(20, 90, 10)) +
+  scale_y_continuous(breaks = seq(2.60, 4.20, 0.25)) +
+  labs(title = expression("Effect of Sampling Fraction"~italic(f)~"on Fitting Discrete Power Law to Component Size"),
+       subtitle = "Red Line is Mean Across 1,000 Samples; Teal Band is 95% Simulation Envelope; 
+Solid Green Line is Fitted Power Law Model for Population; 
+Dashed Green Lines are 95% CI", 
+x = expression("Sampling Fraction"~italic(f)), 
+y = expression(hat(alpha)~"From Fitted Discrete Power Law Model"))
+```
+
+Some interesting results can be clearly observed. For example, we can see that below a sampling fraction $f = 0.70$, the estimate of the mean of the sampling distribution for $\widehat{\alpha}$ (black dot) falls outside the 95% confidence interval for $\alpha$ (dashed green lines) with respect to the population network. This would suggest a sample size "cutoff" for which bias in estimation of $\alpha$ will become an issue. Notice that samples corresponding to $f = 0.55$ or less, say, will yield $\widehat{\alpha}$ that will not be representative of the population network; the smaller the sampling fraction, the more the teal band moves away from the green lines. Finally, and unsurprisingly, it is clear that the smaller the sampling fraction, the more sampling variability there is in estimating $\alpha$ (blue band increasingly fans out).
+
+Assuming a power model for component size is reasonable, the next big question would be, "*If we know "small" sample sizes are not representative of the population network, can we determine a bias correction factor for estimation of $\alpha$?*"
+In studying the plot and thinking about this problem, it would feel to me that the answer has to be "yes". Perhaps this is where Nicole's paper comes into play; I am also thinking about other approaches. Stay tuned :) 
+
+## Part 6: Bias and Exponential Decay
+
+We can use nonlinear least squares to fit an exponential decay model to our estimates of $\alpha$ ($n = 8,000$) for our sequence of sampling fractions $f$. A plausible 3-parameter exponential decay model for $\widehat{\alpha}$ would be:
+$$\widehat{\alpha} = (c + (d - c)\exp(-rf)) + \varepsilon$$
+where $c$ is the lower/right asymptote as $f \rightarrow 100$, $d$ is the expected value of 
+$Y$ at $f = 0$, $r$ is the "steepness", or rate of decay, $f$ is the sampling fraction (expressed as a percentage), and $\varepsilon$ is a normal error term with mean 0 and constant variance $\sigma^2$.
+
+If $Bias[\widehat{\alpha}] = E[\widehat{\alpha}] - \alpha$, and we set $c = \alpha$, then it is easy to see that $Bias[\widehat{\alpha}] = (d - \alpha)\exp(-rf))$.
+
+I should also add that we could fit this model using generalized least squares. In that case, the errors are allowed to be correlated and/or have unequal variances. However, at this point, that level of detail is not neccesary.
+
+```{r 42, include=FALSE}
+library(nlme)
+fit42 <- nls(V2 ~ SSasymp(f, c, d, log_alpha), data = temp41_all)
+fit42
+exp(coef(fit42)[3])
+preds42 <- unique(fitted(fit42))
+
+## GLS; not necessary here yet; still get same preds
+# fit42_m2 <- gnls(V2 ~ SSasymp(f, yf, y0, log_alpha), 
+#                  data = temp41_all, weights = varPower())
+# fit42_m2
+
+temp42_stats <- cbind(temp41_stats, preds42)
+```
+
+Upon fitting this model, we observe $\widehat{c} = 2.70$, $\widehat{d} = 4.63$, and $\widehat{r} = 0.0316$. In the plot below, we take the previous plot and add a blue line corresponding to the fitted exponential decay model. The fit remarkably tracks the interpolated mean (red line). Based on my experience with finite population sampling, I personally do not believe this is coincidence nor that we have blundered upon a model that conforms to what we see. Said another way, I truly do believe that bias for $\widehat{\alpha}$ is a nonlinear function of the sampling fraction $f$.   
+
+```{r 43, echo=FALSE, fig.align='center', warning=FALSE}
+temp42_stats %>%
+  ggplot(aes(f, mean_alpha)) +
+  geom_line(aes(x = f, y = preds42), colour = "blue") +
+  geom_line(aes(x = f, y = mean_alpha), colour = "red") +
+  geom_line(aes(x = f, y = 2.75), colour = "green") +
+  geom_line(aes(x = f, y = 2.62), colour = "green", linetype = 2) +
+  geom_line(aes(x = f, y = 2.91), colour = "green", linetype = 2) +
+  geom_polygon(data = poly41, aes(x = f, y = Bounds), fill = "#00BFC4", alpha = 0.4) +
+  geom_point() +
+  scale_x_continuous(breaks = seq(20, 90, 10)) +
+  scale_y_continuous(breaks = seq(2.60, 4.20, 0.25)) +
+  labs(title = expression("Effect of Sampling Fraction"~italic(f)~"on Fitting Discrete Power Law to Component Size"),
+       subtitle = "Red Line is Mean Across 1,000 Samples; Teal Band is 95% Simulation Envelope;
+Solid Green Line is Fitted Power Law Model for Population;
+Dashed Green Lines are 95% CI; Blue Line is Fitted Exponential Decay Model",
+x = expression("Sampling Fraction"~italic(f)),
+y = expression(hat(alpha)~"From Fitted Discrete Power Law Model"))
+``` 
+  
+## Part 7: Bootstrapping Through Subsampling
+
+In this section, we try the following scheme as laid out in the MSU 2021 summer retreat. Take a sample from the network (recall the network has $n$ = 1,258 nodes) using a sampling fraction $f$, where $f$ = 0.40, 0.60, or 0.80. Next, using the same $f$, take 100 subsamples. Setting $s_{\rm min} = 1$, we fit the discrete power law model as above to each subsample and the sample itself (note we do *not* perform any bootstrap tests for power law goodness-of-fit). This gives us an approximate bootstrap distribution for subsample $\widehat{\alpha}$. We can then estimate relative bias as the mean of $\widehat{\alpha}$ across the 100 subsamples minus the sample $\widehat{\alpha}$ all divided by the sample $\widehat{\alpha}$. Finally, do this for 100 samples (giving us 100 bootstrap distributions) *and* at each $f$.
+    
+```{r 44, eval = FALSE, include = FALSE}
+# ## Data importation
+# ## Do for 80, 60, and 40
+# temp44 <- read_csv("https://raw.githubusercontent.com/carnegien/BayesNet/dev_gabby/Paper8/comp_dist/subsampling/subsamples.4-comp_dist-100.csv")
+# temp44 <- temp44 %>% mutate(sample = rep(1:100, each = 23),
+#                             size = rep(1:23, times = 100), .before = 1) %>% select(-X1)
+# temp44_wide <- temp44 %>%
+#   rename_with(.cols = -c(1, 2), .fn = ~ paste0("SS", .x))
+# write.csv(temp44_wide, file = "/Users/pturk02/Dropbox/Atrium/Projects/Carnegie_Nicole/Lemire_Gabrielle/Data/SubSamp100_Samp100_SampFrac40_Wide.csv", row.names = FALSE, quote = FALSE)
+# ## char to num better for sorting and looping
+# temp44_long <- temp44 %>% pivot_longer(cols = -c(1, 2), names_to = "subsample", values_to = "freq") %>% mutate(subsample = as.numeric(subsample)) %>% relocate(subsample, .after = 1)
+# write.csv(temp44_long, file = "/Users/pturk02/Dropbox/Atrium/Projects/Carnegie_Nicole/Lemire_Gabrielle/Data/SubSamp100_Samp100_SampFrac40_Long.csv", row.names = FALSE, quote = FALSE)
+# 
+# ## Now get the samples
+# temp44_samp <- read_csv("https://raw.githubusercontent.com/carnegien/BayesNet/dev_gabby/Paper8/comp_dist/subsampling/samples.4-comp_dist-100.csv")
+# temp44_samp <- temp44_samp %>% rename(sample = X1)
+# temp44_samp_long <- temp44_samp %>% pivot_longer(cols = -c(1), names_to = "size", values_to = "freq") %>% mutate(size = as.numeric(size)) %>% relocate(size, .after = 1)
+# write.csv(temp44_samp_long, file = "/Users/pturk02/Dropbox/Atrium/Projects/Carnegie_Nicole/Lemire_Gabrielle/Data/Samp100_SampFrac40_Long.csv", row.names = FALSE, quote = FALSE)
+```
+
+```{r 45, include = FALSE}
+temp45 <- read_csv("/Users/pturk02/Dropbox/Atrium/Projects/Carnegie_Nicole/Lemire_Gabrielle/Data/SubSamp100_Samp100_SampFrac80_Long.csv")
+temp45 <- temp45 %>% filter(!freq == 0)
+
+# check <- temp45 %>% group_by(sample, subsample) %>% summarize(tot_prods = sum(size*freq)) ## All sims give 805
+
+temp46 <- tibble(sample = rep(temp45$sample, temp45$freq), 
+                 subsample = rep(temp45$subsample, temp45$freq),
+                 size = rep(temp45$size, temp45$freq))
+temp46 <- temp46 %>% group_by(sample, subsample) %>% arrange(desc(size), .by_group = TRUE)
+
+## Now go get the samples
+temp45_samp <- read_csv("/Users/pturk02/Dropbox/Atrium/Projects/Carnegie_Nicole/Lemire_Gabrielle/Data/Samp100_SampFrac80_Long.csv")
+temp45_samp <- temp45_samp %>% filter(!freq == 0)
+
+# check <- temp45_samp %>% group_by(sample) %>% summarize(tot_prods = sum(size*freq)) ## All sims give 1006
+
+temp46_samp <- tibble(sample = rep(temp45_samp$sample, temp45_samp$freq), 
+                      size = rep(temp45_samp$size, temp45_samp$freq))
+temp46_samp <- temp46_samp %>% group_by(sample) %>% arrange(desc(size), .by_group = TRUE)
+```
+
+```{r 46, eval = FALSE, include = FALSE}
+# temp46 %>% filter(sample == 1) %>%
+# ggplot(aes(size)) +
+#   geom_histogram(show.legend = FALSE) + labs(x = "Component Size", y = "Frequency") +
+#   labs(title = expression("Distribution of Component Size for Network Subsamples ("*italic(f)~ "= 0.80)"), subtitle = "Sample 1, At Each of 100 Subsamples") +
+#   facet_wrap(~ subsample) + theme(strip.text = element_blank(), axis.text = element_text(size = 6))
+```
+  
+```{r 47, include = FALSE}
+my_pl <- function(x) {
+  temp_fit <- displ$new(x)
+  temp_fit$setXmin(1)
+  return(estimate_pars(temp_fit)$pars)
+}
+
+# temp47_holder <- temp46 %>% group_by(sample, subsample) %>%
+#   summarize(sample = first(sample),
+#             subsample = first(subsample),
+#             alpha = my_pl(size))
+
+## Save a single object to a file
+# saveRDS(temp47_holder, "Data/SubSamp100_Samp100_SampFrac80.rds")
+
+## Read it back in
+temp47_holder <- readRDS("Data/SubSamp100_Samp100_SampFrac80.rds")
+
+temp47_samp_holder <- temp46_samp %>% group_by(sample) %>%
+  summarize(sample = first(sample),
+            alpha = my_pl(size))
+```
+  
+Following below is the bootstrap distribution for the *first* sample at $f$ = 0.80. The other two sampling fractions yield qualitatively similar results:  
+  
+```{r 48, echo=FALSE, fig.align='center', message=FALSE}
+temp48 <- temp47_holder %>% filter(sample == 1)
+
+## Percentage relative drop/inc stuff
+max_check <- temp46_samp  %>% group_by(sample) %>% summarize(max = max(size))
+# mean(max_check$max)/23; 23/mean(max_check$max) 
+max_check2 <- temp46 %>% group_by(sample, subsample) %>% summarize(max = max(size))
+max_check2 <- full_join(max_check, max_check2, by = "sample") %>%
+  mutate(rel_drop = 100*(max.y/max.x), rel_inc = 100*(max.x/max.y))
+# mean(max_check2$rel_drop); mean(max_check2$max.y); mean(max_check2$rel_inc)
+
+ggplot(temp48, aes(alpha)) +
+  geom_histogram(show.legend = FALSE) + labs(x = expression(hat(alpha)), y = "Frequency") +
+  labs(title = expression("Bootstrap Distribution of" ~hat(alpha)~ "for Subsamples From Sample 1 ("*italic(f)~ "= 0.80)"),
+       subtitle = expression("Green Dotted Line is Sample 1" ~hat(alpha)* "; Red Dotted Line is Mean" ~hat(alpha)~ "Across 100 Subsamples"), caption = "Blue Solid Lines are 0.025 and 0.975 Quantiles") +
+  geom_vline(xintercept = temp47_samp_holder$alpha[1], linetype = "dotted", color = "green", size = 1.5) +
+  geom_vline(xintercept = mean(temp48$alpha), linetype = "dotted", color = "red", size = 1.5) +
+  geom_vline(xintercept = quantile(temp48$alpha, p = 0.025), linetype = "solid", color = "blue", size = 0.5) +
+  geom_vline(xintercept = quantile(temp48$alpha, p = 0.975), linetype = "solid", color = "blue", size = 0.5) +
+  theme(plot.caption = element_text(hjust = 0))
+```
+  
+```{r 49, include = FALSE}
+## eeah := estimated expectation for alpha-hat
+temp49 <- temp47_holder %>% group_by(sample) %>% summarize(eeah = mean(alpha)) %>% 
+  full_join(temp47_samp_holder) %>% mutate(bias = eeah - alpha, rel_bias = 100*(bias/alpha),
+                                           ratio_bias = bias/0.103875) 
+                                           ## (alpha - 2.748148) in the denom 
+                                           ## does not make great sense
+hist(temp49$bias); mean(temp49$bias); sd(temp49$bias)
+hist(temp49$rel_bias); mean(temp49$rel_bias); sd(temp49$rel_bias);  quantile(temp49$rel_bias, p = 0.025)
+hist(temp49$ratio_bias); mean(temp49$ratio_bias); sd(temp49$ratio_bias);  quantile(temp49$ratio_bias, p = 0.025)
+
+## From Part 5
+## 0.80
+## 2.852023 - 2.748148 = 0.103875
+## 100*((2.852023 - 2.748148)/2.748148)
+```
+  
+```{r 50, include = FALSE}
+temp50 <- read_csv("/Users/pturk02/Dropbox/Atrium/Projects/Carnegie_Nicole/Lemire_Gabrielle/Data/SubSamp100_Samp100_SampFrac60_Long.csv")
+temp50 <- temp50 %>% filter(!freq == 0)
+
+# check <- temp50 %>% group_by(sample, subsample) %>% summarize(tot_prods = sum(size*freq)) ## All sims give 453
+
+temp51 <- tibble(sample = rep(temp50$sample, temp50$freq), 
+                 subsample = rep(temp50$subsample, temp50$freq),
+                 size = rep(temp50$size, temp50$freq))
+temp51 <- temp51 %>% group_by(sample, subsample) %>% arrange(desc(size), .by_group = TRUE)
+
+temp50_samp <- read_csv("/Users/pturk02/Dropbox/Atrium/Projects/Carnegie_Nicole/Lemire_Gabrielle/Data/Samp100_SampFrac60_Long.csv")
+temp50_samp <- temp50_samp %>% filter(!freq == 0)
+
+# check <- temp50_samp %>% group_by(sample) %>% summarize(tot_prods = sum(size*freq)) ## All sims give 755
+
+temp51_samp <- tibble(sample = rep(temp50_samp$sample, temp50_samp$freq), 
+                      size = rep(temp50_samp$size, temp50_samp$freq))
+temp51_samp <- temp51_samp %>% group_by(sample) %>% arrange(desc(size), .by_group = TRUE)
+``` 
+ 
+```{r 51, include = FALSE}
+# temp51_holder <- temp51 %>% group_by(sample, subsample) %>%
+#   summarize(sample = first(sample),
+#             subsample = first(subsample),
+#             alpha = my_pl(size))
+
+## Save a single object to a file
+# saveRDS(temp51_holder, "Data/SubSamp100_Samp100_SampFrac60.rds")
+
+## Read it back in
+temp51_holder <- readRDS("Data/SubSamp100_Samp100_SampFrac60.rds")
+
+temp51_samp_holder <- temp51_samp %>% group_by(sample) %>%
+  summarize(sample = first(sample),
+            alpha = my_pl(size))
+```  
+  
+```{r 52, echo=FALSE, fig.align='center', message=FALSE}
+# temp52 <- temp51_holder %>% filter(sample == 1)
+ 
+## Percentage relative drop/inc stuf
+max_check <- temp51_samp  %>% group_by(sample) %>% summarize(max = max(size))
+# mean(max_check$max); 23/mean(max_check$max) 
+max_check2 <- temp51 %>% group_by(sample, subsample) %>% summarize(max = max(size))
+max_check2 <- full_join(max_check, max_check2, by = "sample") %>%
+  mutate(rel_drop = 100*(max.y/max.x), rel_inc = 100*(max.x/max.y))
+# mean(max_check2$rel_drop); mean(max_check2$max.y); mean(max_check2$rel_inc)
+
+# ggplot(temp52, aes(alpha)) +
+#   geom_histogram(show.legend = FALSE) + labs(x = expression(hat(alpha)), y = "Frequency") +
+#   labs(title = expression("Bootstrap Distribution of" ~hat(alpha)~ "for Subsamples From Sample 1 ("*italic(f)~ "= 0.60 Throughout)"),
+#        subtitle = expression("Green Dotted Line is Sample 1" ~hat(alpha)* "; Red Dotted Line is Mean" ~hat(alpha)~ "Across 100 Subsamples"), caption = "Blue Solid Lines are 0.025 and 0.975 Quantiles") +
+#   geom_vline(xintercept = temp51_samp_holder$alpha[1], linetype = "dotted", color = "green", size = 1.5) +
+#   geom_vline(xintercept = mean(temp52$alpha), linetype = "dotted", color = "red", size = 1.5) +
+#   geom_vline(xintercept = quantile(temp52$alpha, p = 0.025), linetype = "solid", color = "blue", size = 0.5) +
+#   geom_vline(xintercept = quantile(temp52$alpha, p = 0.975), linetype = "solid", color = "blue", size = 0.5) +
+#   theme(plot.caption = element_text(hjust = 0))
+```  
+ 
+```{r 53, include = FALSE}
+## eeah := estimated expectation for alpha-hat
+temp53 <- temp51_holder %>% group_by(sample) %>% summarize(eeah = mean(alpha)) %>% 
+  full_join(temp51_samp_holder) %>% mutate(bias = eeah - alpha, rel_bias = 100*(bias/alpha),
+                                           ratio_bias = bias/0.249354) 
+                                           ## (alpha - 2.748148) in the denom 
+                                           ## does not make great sense
+hist(temp53$bias); mean(temp53$bias); sd(temp53$bias); 
+hist(temp53$rel_bias); mean(temp53$rel_bias); sd(temp53$rel_bias); quantile(temp53$rel_bias, p = 0.025)
+hist(temp53$ratio_bias); mean(temp53$ratio_bias); sd(temp53$ratio_bias);  quantile(temp53$ratio_bias, p = 0.025)
+
+## From Part 5
+## 0.60
+## 2.997502 - 2.748148 = 0.249354
+## 100*((2.997502 - 2.748148)/2.748148)
+``` 
+ 
+```{r 54, include = FALSE}
+temp54 <- read_csv("/Users/pturk02/Dropbox/Atrium/Projects/Carnegie_Nicole/Lemire_Gabrielle/Data/SubSamp100_Samp100_SampFrac40_Long.csv")
+temp54 <- temp54 %>% filter(!freq == 0)
+
+# check <- temp54 %>% group_by(sample, subsample) %>% summarize(tot_prods = sum(size*freq)) ## All sims give 201
+
+temp55 <- tibble(sample = rep(temp54$sample, temp54$freq), 
+                 subsample = rep(temp54$subsample, temp54$freq),
+                 size = rep(temp54$size, temp54$freq))
+temp55 <- temp55 %>% group_by(sample, subsample) %>% arrange(desc(size), .by_group = TRUE)
+
+temp54_samp <- read_csv("/Users/pturk02/Dropbox/Atrium/Projects/Carnegie_Nicole/Lemire_Gabrielle/Data/Samp100_SampFrac40_Long.csv")
+temp54_samp <- temp54_samp %>% filter(!freq == 0)
+
+# check <- temp54_samp %>% group_by(sample) %>% summarize(tot_prods = sum(size*freq)) ## All sims give 503
+
+temp55_samp <- tibble(sample = rep(temp54_samp$sample, temp54_samp$freq), 
+                      size = rep(temp54_samp$size, temp54_samp$freq))
+temp55_samp <- temp55_samp %>% group_by(sample) %>% arrange(desc(size), .by_group = TRUE)
+``` 
+
+```{r 55, include = FALSE}
+# temp55_holder <- temp55 %>% group_by(sample, subsample) %>%
+#   summarize(sample = first(sample),
+#             subsample = first(subsample),
+#             alpha = my_pl(size))
+
+## Save a single object to a file
+# saveRDS(temp55_holder, "Data/SubSamp100_Samp100_SampFrac40.rds")
+
+## Read it back in
+temp55_holder <- readRDS("Data/SubSamp100_Samp100_SampFrac40.rds")
+
+temp55_samp_holder <- temp55_samp %>% group_by(sample) %>%
+  summarize(sample = first(sample),
+            alpha = my_pl(size))
+```
+
+```{r 56, echo=FALSE, fig.align='center', message=FALSE}
+# temp56 <- temp55_holder %>% filter(sample == 1)
+
+## Percentage relative drop/inc stuff
+max_check <- temp55_samp  %>% group_by(sample) %>% summarize(max = max(size))
+# mean(max_check$max); 23/mean(max_check$max) 
+max_check2 <- temp55 %>% group_by(sample, subsample) %>% summarize(max = max(size))
+max_check2 <- full_join(max_check, max_check2, by = "sample") %>%
+  mutate(rel_drop = 100*(max.y/max.x), rel_inc = 100*(max.x/max.y))
+# mean(max_check2$rel_drop); mean(max_check2$max.y); mean(max_check2$rel_inc)
+
+# ggplot(temp56, aes(alpha)) +
+#   geom_histogram(show.legend = FALSE) + labs(x = expression(hat(alpha)), y = "Frequency") +
+#   labs(title = expression("Bootstrap Distribution of" ~hat(alpha)~ "for Subsamples From Sample 1 ("*italic(f)~ "= 0.40 Throughout)"),
+#        subtitle = expression("Green Dotted Line is Sample 1" ~hat(alpha)* "; Red Dotted Line is Mean" ~hat(alpha)~ "Across 100 Subsamples"), caption = "Blue Solid Lines are 0.025 and 0.975 Quantiles") +
+#   geom_vline(xintercept = temp55_samp_holder$alpha[1], linetype = "dotted", color = "green", size = 1.5) +
+#   geom_vline(xintercept = mean(temp56$alpha), linetype = "dotted", color = "red", size = 1.5) +
+#   geom_vline(xintercept = quantile(temp56$alpha, p = 0.025), linetype = "solid", color = "blue", size = 0.5) +
+#   geom_vline(xintercept = quantile(temp56$alpha, p = 0.975), linetype = "solid", color = "blue", size = 0.5) +
+#   theme(plot.caption = element_text(hjust = 0))
+```  
+  
+```{r 57, include = FALSE}
+## eeah := estimated expectation for alpha-hat
+temp57 <- temp55_holder %>% group_by(sample) %>% summarize(eeah = mean(alpha)) %>% 
+  full_join(temp55_samp_holder) %>% mutate(bias = eeah - alpha, rel_bias = 100*(bias/alpha),
+                                           ratio_bias = bias/0.485516) 
+                                           ## (alpha - 2.748148) in the denom 
+                                           ## does not make great sense
+hist(temp57$bias); mean(temp57$bias); sd(temp57$bias); 
+hist(temp57$rel_bias); mean(temp57$rel_bias); sd(temp57$rel_bias); quantile(temp57$rel_bias, p = 0.025)
+hist(temp57$ratio_bias); mean(temp57$ratio_bias); sd(temp57$ratio_bias);  quantile(temp57$ratio_bias, p = 0.025)
+
+## From Part 5
+## 0.40
+## 3.233664 - 2.748148 = 0.485516
+## 100*((3.233664 - 2.748148)/2.748148)  
+``` 
+
+Using Part 5 results, we can use a proxy "actual relative bias" as the mean of $\widehat{\alpha}$ across the 1,000 samples minus the population network $\widehat{\alpha}$ all divided by the population network $\widehat{\alpha}$. "Mean relative bias" is taken as the mean bootstrap-based estimated relative bias (as just described above) across the corresponding 100 bootstrap distributions; we also show the 2.5th percentile for these 100 bootstrap-based estimated relative biases.
+
+```{r 58, echo=FALSE}
+temp58 <- tibble(`Sampling Fraction` = c(0.80, 0.60, 0.40),
+                 `Actual Relative Bias` = c(0.0378, 0.0907, 0.1767),
+                 `Mean Relative Bias` = c(0.0392, 0.1021, 0.2168),
+                 `Bootstrap-Based 2.5%` = c(0.0343, 0.0865, 0.1824))
+
+temp58 %>% kbl(align = "l") %>%
+  column_spec(1:4, border_left = T, border_right = T) %>% kable_classic(full_width = F) %>%
+  kable_styling(latex_options = "hold_position")
+```
+
+Using bootstrapping as described here to estimate and correct for bias in estimating $\alpha$ appears to be a good option for $f = 0.80$, and an ok option for $f = 0.60$. However, by the time we drop down to $f = 0.40$, the actual relative bias is now solidly below the 2.5th percentile; that is, our bootstrapping procedure appears to be overzealous, on average, with respect to estimating bias. I suspect this would only get worse for smaller sampling fractions.
+
+Here is another way to look it. For each sample, we compute the ratio of bootstrap-based estimated *absolute* bias divided by the actual *absolute* bias. We then take the mean across the 100 samples (call this "mean ratio bias") and also the 2.5th percentile (call this "2.5% ratio bias"). The results are below: 
+
+```{r 59, echo=FALSE}
+temp59 <- tibble(`Sampling Fraction` = c(0.80, 0.60, 0.40),
+                 `Mean Ratio Bias` = c(1.07, 1.23, 1.44),
+                 `2.5% Ratio Bias` = c(0.95, 1.03, 1.22))
+
+temp59 %>% kbl(align = "l") %>%
+  column_spec(1:3, border_left = T, border_right = T) %>% kable_classic(full_width = F) %>%
+  kable_styling(latex_options = "hold_position")
+```
+
+These results harmonize nicely with what we observed in the previous table.
+
+Lastly, for each of the 100 samples at each sampling fraction, we compute the maximum component size. We then compute its mean, minimum, and maximum. Percentage relative drop is computed using the mean maximum component size relative to 23 (the size of the largest component in the network population) as 100*(1 - mean maximum component size/23).
+
+For each of the 10,000 subsamples at each sampling fraction, we compute the maximum component size. We then compute its mean, minimum, and maximum. Percentage relative drop is computed using the sample-specific maximum component size with mean taken over all 10,000 subsamples; that is, as the mean of 100*(1 - maximum component size for subsample(sample)/maximum component size for sample). 
+
+Note the difference in % relative drop between the subsamples minus the sample is 1.6% for $f$ = 0.80, 1.1% for $f$ = 0.60, and -0.2% for $f$ = 0.40. It appears we are at least in the ballpark correctly simulating the right-tail trimming inherent in SRSWOR from a finite network population and maybe doing a better job as the sampling fraction decreases.
+
+```{r 60, echo=FALSE}
+temp60 <- tibble(Source = c("Sample", "Subsamples", "Sample", "Subsamples", "Sample", "Subsamples"),
+                 f = c(0.80, 0.80, 0.60, 0.60, 0.40, 0.40),
+                 `Mean Max Comp Size` = c(19.14, 15.61, 14.57, 9.01, 10.37, 4.61),
+                 `% Rel Drop` = c(16.8, 18.4, 36.7, 37.8, 54.9, 54.7),
+                 `Min Max Comp Size` = c(15, 9, 9, 4, 6, 2),
+                 `Max Max Comp Size` = c(22, 22, 21, 17, 15, 11))
+
+temp60 %>% kbl(align = "l") %>%
+  column_spec(1:6, border_left = T, border_right = T) %>% kable_classic(full_width = F) %>%
+  kable_styling(latex_options = "hold_position")
+```
+
+## Part 8: The Switch to a Continuous Counterpart
+
+Once again, the power law probability mass function (pmf) for discrete component size $S$ is:
+$$P[S = s] = \frac{s^{-\alpha}}{\zeta(\alpha, s_{\rm min})}$$
+where:
+$$\zeta(\alpha, s_{\rm min}) = \sum_{n = 0}^{\infty}(n + s_{\rm min})^{-\alpha}$$
+is the Hurwitz zeta function (evaluated numerically in R). Note that $s_{\rm min} > 0$ and
+$\alpha > 1$. When $s_{\rm min} = 1$, the the Hurwitz zeta function is the specific case known as the Riemann zeta function.
+
+The power law probability density function (pdf) for *continuous* component size $S$ is:
+$$f_S(s) = \frac{\alpha - 1}{s_{\rm min}}\left(\frac{s}{s_{\rm min}}\right)^{-\alpha}$$
+
+When $s_{\rm min} = 1$, then it is easy to see that the pmf and pdf above differ only by a constant. Said another way, to recover the pdf from the pmf, we multiply the pmf by 
+$(\alpha - 1)\zeta(\alpha,1)$; to recover the pmf from the pdf, we multiply the pdf by 
+$1/[(\alpha - 1)\zeta(\alpha,1)]$. For example, suppose we set $\alpha$ equal to 3.8. In the plots below, the pdf (LHS) and the pmf (RHS) have a similar shape. *Importantly, they have the same $\alpha$.*
+
+```{r 61, echo=FALSE, fig.align='center', message=FALSE}
+oldpar <- par(mfrow = c(1, 2))
+
+.x <- seq(1, 10, length=100)
+plot(.x, dplcon(.x, 1, 3.8), xlab="x", ylab="Density", main="", type="l")
+abline(h=0, col="gray")
+remove(.x)
+
+.x <- seq(1, 10, length=100)
+plot(.x, dpldis(.x, 1, 3.8), xlab="x", ylab="Probability", main="", type="h")
+points(.x, dpldis(.x, 1, 3.8), pch = 19)
+abline(h=0, col="gray")
+remove(.x)
+
+par(oldpar)
+```
+
+If you are still skeptical, then we can use R to pick a few values of $S$ and verify our claims:
+
+```{r, 62}
+## Discrete --> Continuous
+(3.8 - 1)*zeta(3.8)*dpldis(c(1, 5, 10), 1, 3.8)
+dplcon(c(1, 5, 10), 1, 3.8)
+
+## Continuous --> Discrete
+(1/((3.8 - 1)*zeta(3.8)))*dplcon(c(1, 5, 10), 1, 3.8)
+dpldis(c(1, 5, 10), 1, 3.8)
+```
+
+Regarding a transformation, we ideally want the transformation to map from integers to integers. Multiplying by another integer has this property, but it's not clear how one would choose it in a way that preserves the power law behavior. If one is not careful, one instead gets a mapping from integers to reals, and then it's no longer precisely a discrete power law. I see no place in the literature where one has considered this "rescaling" question before. The analogous operation for continuous data might be more straight forward and also estimates the shape parameter we seek. Furthermore, it appears continuous power laws are the standard thing studied in mathematical scenarios like this.
+
+## Part 9: Transformation to Proxy Population
+
+A one-to-one function that transforms the random variable $X$ into the random variable $Y$, where both $X \sim CPL(\alpha, 1)$ and $Y \sim CPL(\alpha^*, 1)$ follow a Continuous Power Law distribution is:
+
+$$Y = X^{w}$$
+
+where $w = \frac{\alpha - 1}{\alpha^* - 1}$. Please see the proof I sent you where I showed this result in general and for the maximum order statistic.
+
+Parameter $w$ can be rewritten as:
+
+$$w = \frac{\log(Y)}{\log(X)}$$.
+
+Define "tail trimming" $t$ to be: 
+
+$$t := \frac{X_{(n)}}{Y_{(n)}}$$
+
+where $X_{(n)}$ is the maximum component size with respect to $X$, $Y_{(n)}$ is the maximum component size with respect to $Y$, and $X_{(n)} < Y_{(n)}$. By Part 7 above, we assume:
+
+$$t = \frac{S_{(n), \ ss}}{S_{(n), \ s}} \approx \frac{S_{(n), \ s}}{S_{(n), \ p}}$$
+
+where $S_{(n)}$ is the maximum component size with the subscript denoting whether it is from the subsample ($ss$), sample ($s$), or the population ($p$).
+
+Note that since $w$ is a function of parameters, it is a constant that holds for all $X$ and $Y$. Therefore, if $X$ corresponds to the subsample and $Y$ corresponds to the population, we can write:
+
+$$Y = X^{\frac{\log(Y_{(n)})}{\log(X_{(n)})}}$$
+
+and invoking the tail trimming result:
+
+$$Y = X^{1- \frac{\log(t^2)}{\log(X_{(n)})}}$$
+
+This latter result should allow us to transform the component sizes from a subsample to a "proxy" population by which we can estimate the shape parameter. Therefore, we implement the following algorithm for each of the 100 samples at each sampling fraction ($0.40, 0.60, 0.80$):
+
+1. Get maximum sample size from sample.
+2. Get maximum subsample size for each of the 100 subsamples.
+3. Create $t = \frac{s_{(n), \ ss}}{s_{(n), \ s}}$ for each of the 100 subsamples..
+4. Create $w = 1- \log(t^2)/\log(X_{(n)})$ for each of the 100 subsamples.
+5. Apply transformation $x^w$ and round result to generate proxy population for each of the 100 subsamples.
+
+```{r 63, echo=FALSE, cache=TRUE, message=FALSE}
+## f = 0.80
+
+## Will need:
+## 1. subsample(sample) frequency distributions (e.g., temp45)
+## 2. sample frequency distributions (e.g., temp45_samp)
+## 3. subsample(sample) raw sizes (e.g., temp46)
+
+## Get max size for each sample from sample frequency distributions
+temp63_max_y <- temp45_samp %>% group_by(sample) %>% summarize(max_y = max(size)) 
+## Join with subsample raw sizes
+temp63 <- left_join(temp46, temp63_max_y) 
+## Get max size for each subsample(sample) from subsample frequency distributions
+temp63_max_x <- temp45 %>% group_by(sample, subsample) %>% summarize(max_x = max(size))
+## Join with subsample raw sizes
+temp63 <- left_join(temp63, temp63_max_x) 
+## Create t, w, and rounded proxy population data
+temp63 <- temp63 %>% mutate(t = max_x/max_y, w = 1 - (log(t^2)/log(max_x)), proxy_pop = size^w)
+## Trying constructing proxy_pop using mean(t) and mean(max(x))
+temp63_b <- temp63 %>% group_by(sample, subsample) %>% 
+  summarize(t = first(t), max_x = first(max_x)) %>% group_by(sample) %>% 
+  summarize(t_m = mean(t), max_x_m = mean(max_x))
+temp63 <- left_join(temp63, temp63_b) %>% mutate(w_m = 1 - (log(t_m^2)/log(max_x_m)), proxy_pop_m = size^w_m) # tstar = max_y/max_x, max_p_star = max_x*tstar^2)
+# temp63_checking <- temp63 %>% mutate(est_max_p = max_x/t^2, .after = 8) 
+
+## Now estimate DPL alpha for each subsample(sample)
+temp63_alpha <- temp63 %>% group_by(sample, subsample) %>% summarize(alpha = my_pl(round(proxy_pop)))
+
+# ## What does the distribution of max(proxy_pop) look like?
+# ## Right-skewed with mean of 23.78
+# mad_max <- temp63 %>% group_by(sample, subsample) %>% summarize(max = max(proxy_pop))
+# hist(mad_max$max); mean(mad_max$max); length(mad_max$max)
+
+# ## Check to see if subsamples follow power law
+# temp63_gof <- temp63 %>% select(sample, subsample, size) %>% 
+#   mutate(counter = 100*(sample - 1) + subsample)
+# 
+# ## Just randomly grab 1,000, instead of 10,000; should be enough to give us insight
+# ran_nums <- sample(1:10000, 1000)
+# temp63_gof <- temp63_gof %>% filter(counter %in% ran_nums) %>% group_by(counter) %>% 
+#   mutate(counter = cur_group_id()) 
+#   
+# temp63_holder <- matrix(NA, nrow = 1000, ncol = 3)
+# 
+# ## Choose no_of_sims = 1000, instead of 3000, unless I have 7.5 years to wait :)
+# # ptm <- proc.time()
+# for(i in 1:1000){
+# temp63_gof_chunk <- temp63_gof %>% filter(counter == as.character(i))
+# 
+# pl_size63 <- displ$new(temp63_gof_chunk$size)
+# pl_size63$setXmin(1)
+# temp63_holder[i, 1] <- pl_size63$xmin 
+# temp63_holder[i, 2] <- estimate_pars(pl_size63)$pars
+# bs_size_p63 <- bootstrap_p(pl_size63, xmins = 1, no_of_sims = 1000, threads = 4, seed = 20211113)
+# temp63_holder[i, 3] <- bs_size_p63$p
+# cat("iteration = ", i, "\n")
+# }
+# # proc.time() - ptm
+# 
+# temp63_holder
+
+## Save a single object to a file
+# saveRDS(temp63_holder, "Data/proxy80boot.rds")
+## Read it back in
+temp63_holder <- readRDS("Data/proxy80boot.rds")
+# hist(temp63_holder[,3])
+# sum(ifelse(temp63_holder[,3] <= 0.05, 1, 0)) ## Only 10 out of 1,000
+
+## Sidebar: trying to understand why transformation didn't go as planned
+## and creating a toy data set for further exploration.
+temp63_example <- temp63 %>% filter(sample == 1, subsample == 1)
+temp63_example_a <- temp63_example %>% group_by(size) %>% count() %>%
+  ungroup %>% mutate(rel_freq = n/sum(n))
+temp63_example_b <- temp63_example %>% group_by(proxy_pop) %>% count() %>%
+  ungroup %>% mutate(rel_freq = n/sum(n))
+## The transformation does the stretching of the tail correctly, but it does not dampen
+## the probabilities for the smaller sample sizes.
+temp63_example_c <- temp63_example_a %>%
+  add_column(proxy_pop = temp63_example_b$proxy_pop)
+# write.csv(temp63_example_c, file = "/Users/pturk02/Dropbox/Atrium/Projects/Carnegie_Nicole/Lemire_Gabrielle/Data/example01.csv", row.names = FALSE)
+```
+
+We begin by looking at sampling fraction $f = 0.80$. Below is the distribution of proxy $\widehat{\alpha}$ for 100 subsamples from an arbitrarily chosen sample. It appears comparing the mean $\widehat{\alpha}$ across the 100 subsamples (red dotted line) to "truth" (green solid line), the bias issue is not resolved for this sample. In fact, looking at the sample $\widehat{\alpha}$ (green dotted line), we actually do *worse* here. 
+
+```{r 64, echo = FALSE, fig.align = 'center', message = FALSE}
+temp64 <- temp63_alpha %>% filter(sample == 16)
+
+ggplot(temp64, aes(alpha)) +
+  geom_histogram(show.legend = FALSE) + labs(x = expression(hat(alpha)), y = "Frequency") +
+  labs(title = expression("Distribution of Proxy" ~hat(alpha)~ "for Subsamples From Sample 16 ("*italic(f)~ "= 0.80)"),
+       subtitle = expression("Green Dotted Line is Sample 16" ~hat(alpha)* "; Red Dotted Line is Mean" ~hat(alpha)~ "Across 100 Subsamples"),
+caption = "Green Solid Line is Population" ~alpha* "; Red Solid Lines are 0.025 and 0.975 Quantiles") +
+  geom_vline(xintercept = temp47_samp_holder$alpha[16], linetype = "dotted", color = "green", size = 1.5) +
+  geom_vline(xintercept = 2.748148, linetype = "solid", color = "green", size = 0.5) +
+  geom_vline(xintercept = mean(temp64$alpha), linetype = "dotted", color = "red", size = 1.5) +
+  geom_vline(xintercept = quantile(temp64$alpha, p = 0.025), linetype = "solid", color = "red", size = 0.5) +
+  geom_vline(xintercept = quantile(temp64$alpha, p = 0.975), linetype = "solid", color = "red", size = 0.5) +
+  theme(plot.caption = element_text(hjust = 0))
+```
+
+In looking at all 100 samples, the mean $\widehat{\alpha} = 2.85 \; (95\% \; CI: 2.79, 2.91)$ (jibes with Part 5). In looking at the proxy $\widehat{\alpha}$'s, the mean $\widehat{\alpha} = 2.88 \; (95\% \; CI: 2.82, 2.95)$. The proxy-based confidence interval estimates captured the population $\alpha$ (2.75) for 68 out of 100 samples. In only 3 samples was the proxy-based estimate closer to the population $\alpha$ than simply estimating $\alpha$ from the sample itself.
+
+Lastly, I randomly grabbed 1,000 subsamples (from 10,000) and ran the bootstrap test for power law goodness-of-fit. Once again, this is a computationally expensive operation. Only 10 subsamples evidence a departure from a discrete power law distribution. So our results cannot be ascribed to subsamples that do not follow a discrete power law distribution.  
+
+Before we abandon what appears to be a lost cause, let us check the remaining two sampling fractions.
+
+```{r 65, message=FALSE, include=FALSE}
+temp65 <- temp63_alpha %>% group_by(sample) %>% 
+  summarize(proxy_ahat = mean(alpha),
+            lower = quantile(alpha, p = 0.025),
+            upper = quantile(alpha, p = 0.975)) %>% 
+  mutate(cover = ifelse(lower <= 2.748148 & upper >= 2.748148, 1, 0))
+temp65 <- temp47_samp_holder %>% left_join(temp65) %>% 
+  mutate(proxy_better = ifelse(proxy_ahat <= alpha, 1, 0))
+
+temp65 %>% summarize(coverage = mean(cover),
+                     betterment = mean(proxy_better)) ## 0.68, 0.03
+
+## Check
+mean(temp65$alpha) ## 2.85
+quantile(temp65$alpha, p = c(0.025, 0.975)) ## (2.79, 2.91)
+mean(temp65$proxy_ahat) ## 2.88
+quantile(temp65$proxy_ahat, p = c(0.025, 0.975)) ## (2.82, 2.95)
+```
+
+```{r 66, echo=FALSE, cache=TRUE, message = FALSE}
+## f = 0.60
+
+## Will need:
+## 1. subsample(sample) frequency distributions (temp50)
+## 2. sample frequency distributions (temp50_samp)
+## 3. subsample(sample) raw sizes (temp51)
+
+## Get max size for each sample from sample frequency distributions
+temp66_max_y <- temp50_samp %>% group_by(sample) %>% summarize(max_y = max(size)) 
+## Join with subsample raw sizes
+temp66 <- left_join(temp51, temp66_max_y) 
+## Get max size for each subsample(sample) from subsample frequency distributions
+temp66_max_x <- temp50 %>% group_by(sample, subsample) %>% summarize(max_x = max(size))
+## Join with subsample raw sizes
+temp66 <- left_join(temp66, temp66_max_x) 
+## Create t, w, and rounded proxy population data
+temp66 <- temp66 %>% mutate(t = max_x/max_y, w = 1 - (log(t^2)/log(max_x)), proxy_pop = size^w)
+## Trying constructing proxy_pop using mean(t)
+temp66_b <- temp66 %>% group_by(sample, subsample) %>% 
+  summarize(t = first(t), max_x = first(max_x)) %>% group_by(sample) %>% 
+  summarize(t_m = mean(t), max_x_m = mean(max_x))
+temp66 <- left_join(temp66, temp66_b) %>% mutate(w_m = 1 - (log(t_m^2)/log(max_x_m)), proxy_pop_m = size^w_m)
+
+## Now estimate DPL alpha for each subsample(sample)
+temp66_alpha <- temp66 %>% group_by(sample, subsample) %>% summarize(alpha = my_pl(round(proxy_pop))) 
+
+# ## What does the distribution of max(proxy_pop) look like?
+# ## Quite right-skewed with mean of 24.39
+# mad_max <- temp66 %>% group_by(sample, subsample) %>% summarize(max = max(proxy_pop))
+# hist(mad_max$max); mean(mad_max$max); length(mad_max$max)
+
+# ## Check to see if subsamples follow power law
+# temp66_gof <- temp66 %>% select(sample, subsample, size) %>% 
+#   mutate(counter = 100*(sample - 1) + subsample)
+# 
+# ## Just randomly grab 1,000, instead of 10,000; should be enough to give us insight
+# ran_nums <- sample(1:10000, 1000)
+# temp66_gof <- temp66_gof %>% filter(counter %in% ran_nums) %>% group_by(counter) %>% 
+#   mutate(counter = cur_group_id()) 
+#   
+# temp66_holder <- matrix(NA, nrow = 1000, ncol = 3)
+# 
+# ## Choose no_of_sims = 1000, instead of 3000, unless I have 7.5 years to wait :)
+# # ptm <- proc.time()
+# for(i in 1:1000){
+# temp66_gof_chunk <- temp66_gof %>% filter(counter == as.character(i))
+# 
+# pl_size66 <- displ$new(temp66_gof_chunk$size)
+# pl_size66$setXmin(1)
+# temp66_holder[i, 1] <- pl_size66$xmin 
+# temp66_holder[i, 2] <- estimate_pars(pl_size66)$pars
+# bs_size_p66 <- bootstrap_p(pl_size66, xmins = 1, no_of_sims = 1000, threads = 4, seed = 20211113)
+# temp66_holder[i, 3] <- bs_size_p66$p
+# cat("iteration = ", i, "\n")
+# }
+# # proc.time() - ptm
+# 
+# temp66_holder
+
+## Save a single object to a file
+# saveRDS(temp66_holder, "Data/proxy60boot.rds")
+## Read it back in
+temp66_holder <- readRDS("Data/proxy60boot.rds")
+# hist(temp66_holder[,3])
+# sum(ifelse(temp66_holder[,3] <= 0.05, 1, 0)) ## Only 17 out of 1,000
+```
+
+Let's look at sampling fraction $f = 0.60$. Below is the distribution of proxy $\widehat{\alpha}$ for 100 subsamples from the same arbitrarily chosen sample as before. Once again, comparing the mean $\widehat{\alpha}$ across the 100 subsamples (red dotted line) to "truth" (green solid line), the bias issue does not appear to be resolved for this sample.  
+
+```{r 67, echo = FALSE, fig.align = 'center', message = FALSE}
+temp67 <- temp66_alpha %>% filter(sample == 16)
+
+ggplot(temp67, aes(alpha)) +
+  geom_histogram(show.legend = FALSE) + labs(x = expression(hat(alpha)), y = "Frequency") +
+  labs(title = expression("Distribution of Proxy" ~hat(alpha)~ "for Subsamples From Sample 16 ("*italic(f)~ "= 0.60)"),
+       subtitle = expression("Green Dotted Line is Sample 16" ~hat(alpha)* "; Red Dotted Line is Mean" ~hat(alpha)~ "Across 100 Subsamples"),
+caption = "Green Solid Line is Population" ~alpha* "; Red Solid Lines are 0.025 and 0.975 Quantiles") +
+  geom_vline(xintercept = temp51_samp_holder$alpha[16], linetype = "dotted", color = "green", size = 1.5) +
+  geom_vline(xintercept = 2.748148, linetype = "solid", color = "green", size = 0.5) +
+  geom_vline(xintercept = mean(temp67$alpha), linetype = "dotted", color = "red", size = 1.5) +
+  geom_vline(xintercept = quantile(temp67$alpha, p = 0.025), linetype = "solid", color = "red", size = 0.5) +
+  geom_vline(xintercept = quantile(temp67$alpha, p = 0.975), linetype = "solid", color = "red", size = 0.5) +
+  theme(plot.caption = element_text(hjust = 0))
+```
+
+In looking at all 100 samples, the mean $\widehat{\alpha} = 3.00 \; (95\% \; CI: 2.89, 3.11)$ (jibes with Part 5). In looking at the proxy $\widehat{\alpha}$'s, the mean $\widehat{\alpha} = 2.94 \; (95\% \; CI: 2.84, 3.06)$. The proxy-based confidence interval estimates captured the population $\alpha$ (2.75) for 90 out of 100 samples; these confidence intervals are broad, though. For 90 samples, the proxy-based estimate was closer to the population $\alpha$ than estimating $\alpha$ from the sample itself. Hence, our proxy-based estimation does a little better than doing nothing at all (i.e., just relying on the sample), but still shows bias.
+
+I randomly grabbed 1,000 subsamples (from 10,000) and ran the bootstrap test for power law goodness-of-fit. Only 17 subsamples evidence a departure from a discrete power law distribution.   
+
+```{r 68, message=FALSE, include=FALSE}
+temp68 <- temp66_alpha %>% group_by(sample) %>% 
+  summarize(proxy_ahat = mean(alpha),
+            lower = quantile(alpha, p = 0.025),
+            upper = quantile(alpha, p = 0.975)) %>% 
+  mutate(cover = ifelse(lower <= 2.748148 & upper >= 2.748148, 1, 0))
+temp68 <- temp51_samp_holder %>% left_join(temp68) %>% 
+  mutate(proxy_better = ifelse(proxy_ahat <= alpha, 1, 0))
+
+temp68 %>% summarize(coverage = mean(cover),
+                     betterment = mean(proxy_better)) ## 0.90, 0.90
+
+mean(temp68$alpha) ## 3.00
+quantile(temp68$alpha, p = c(0.025, 0.975)) ## (2.89, 3.11)
+mean(temp68$proxy_ahat) ## 2.94
+quantile(temp68$proxy_ahat, p = c(0.025, 0.975)) ## (2.84, 3.06)
+```
+
+```{r 69, echo=FALSE, cache=TRUE, message=FALSE}
+## f = 0.40
+
+## Will need:
+## 1. subsample(sample) frequency distributions (temp54)
+## 2. sample frequency distributions (temp54_samp)
+## 3. subsample(sample) raw sizes (temp55)
+
+## Get max size for each sample from sample frequency distributions
+temp69_max_y <- temp54_samp %>% group_by(sample) %>% summarize(max_y = max(size)) 
+## Join with subsample raw sizes
+temp69 <- left_join(temp55, temp69_max_y) 
+## Get max size for each subsample(sample) from subsample frequency distributions
+temp69_max_x <- temp54 %>% group_by(sample, subsample) %>% summarize(max_x = max(size))
+## Join with subsample raw sizes
+temp69 <- left_join(temp69, temp69_max_x) 
+## Create t, w, and rounded proxy population data
+temp69 <- temp69 %>% mutate(t = max_x/max_y, w = 1 - (log(t^2)/log(max_x)), proxy_pop = size^w)
+## Trying constructing proxy_pop using mean(t)
+temp69_b <- temp69 %>% group_by(sample, subsample) %>% 
+  summarize(t = first(t), max_x = first(max_x)) %>% group_by(sample) %>% 
+  summarize(t_m = mean(t), max_x_m = mean(max_x))
+temp69 <- left_join(temp69, temp69_b) %>% mutate(w_m = 1 - (log(t_m^2)/log(max_x_m)), proxy_pop_m = size^w_m)
+
+## Now estimate DPL alpha for each subsample(sample)
+temp69_alpha <- temp69 %>% group_by(sample, subsample) %>% summarize(alpha = my_pl(round(proxy_pop))) 
+
+# ## What does the distribution of max(proxy_pop) look like?
+# ## Even more right-skewed with mean of 25.19
+# mad_max <- temp69 %>% group_by(sample, subsample) %>% summarize(max = max(proxy_pop))
+# hist(mad_max$max); mean(mad_max$max); length(mad_max$max)
+
+# ## Check to see if subsamples follow power law
+# temp69_gof <- temp69 %>% select(sample, subsample, size) %>% 
+#   mutate(counter = 100*(sample - 1) + subsample)
+# 
+# ## Just randomly grab 1,000, instead of 10,000; should be enough to give us insight
+# ran_nums <- sample(1:10000, 1000)
+# temp69_gof <- temp69_gof %>% filter(counter %in% ran_nums) %>% group_by(counter) %>% 
+#   mutate(counter = cur_group_id()) 
+#   
+# temp69_holder <- matrix(NA, nrow = 1000, ncol = 3)
+# 
+# ## Choose no_of_sims = 1000, instead of 3000, unless I have 7.5 years to wait :)
+# ## 229, 290, 375, 479, 785 crashed
+# # ptm <- proc.time()
+# for(i in 786:1000){
+# temp69_gof_chunk <- temp69_gof %>% filter(counter == as.character(i))
+# 
+# pl_size69 <- displ$new(temp69_gof_chunk$size)
+# pl_size69$setXmin(1)
+# temp69_holder[i, 1] <- pl_size69$xmin
+# temp69_holder[i, 2] <- estimate_pars(pl_size69)$pars
+# bs_size_p69 <- bootstrap_p(pl_size69, xmins = 1, no_of_sims = 1000, threads = 4, seed = 20211113)
+# temp69_holder[i, 3] <- bs_size_p69$p
+# cat("iteration = ", i, "\n")
+# }
+# # proc.time() - ptm
+# 
+# temp69_holder
+
+## Save a single object to a file
+# saveRDS(temp69_holder, "Data/proxy40boot.rds")
+## Read it back in
+temp69_holder <- readRDS("Data/proxy40boot.rds")
+# hist(temp69_holder[,3])
+# sum(ifelse(temp69_holder[,3] <= 0.05 | is.na(temp69_holder[,3]), 1, 0)) ## Only 15 out of 1,000
+```
+
+Finally, let's look at sampling fraction $f = 0.40$. Below is the distribution of proxy $\widehat{\alpha}$ for 100 subsamples from the same arbitrarily chosen sample as before. Once again, comparing the mean $\widehat{\alpha}$ across the 100 subsamples (red dotted line) to "truth" (green solid line), the bias issue does not appear to be resolved for this sample.  
+
+```{r 70, echo = FALSE, fig.align = 'center', message = FALSE}
+temp70 <- temp69_alpha %>% filter(sample == 16)
+
+ggplot(temp70, aes(alpha)) +
+  geom_histogram(show.legend = FALSE) + labs(x = expression(hat(alpha)), y = "Frequency") +
+  labs(title = expression("Distribution of Proxy" ~hat(alpha)~ "for Subsamples From Sample 16 ("*italic(f)~ "= 0.40)"),
+       subtitle = expression("Green Dotted Line is Sample 16" ~hat(alpha)* "; Red Dotted Line is Mean" ~hat(alpha)~ "Across 100 Subsamples"),
+caption = "Green Solid Line is Population" ~alpha* "; Red Solid Lines are 0.025 and 0.975 Quantiles") +
+  geom_vline(xintercept = temp55_samp_holder$alpha[16], linetype = "dotted", color = "green", size = 1.5) +
+  geom_vline(xintercept = 2.748148, linetype = "solid", color = "green", size = 0.5) +
+  geom_vline(xintercept = mean(temp70$alpha), linetype = "dotted", color = "red", size = 1.5) +
+  geom_vline(xintercept = quantile(temp70$alpha, p = 0.025), linetype = "solid", color = "red", size = 0.5) +
+  geom_vline(xintercept = quantile(temp70$alpha, p = 0.975), linetype = "solid", color = "red", size = 0.5) +
+  theme(plot.caption = element_text(hjust = 0))
+```
+
+In looking at all 100 samples, the mean $\widehat{\alpha} = 3.24 \; (95\% \; CI: 3.07, 3.45)$ (jibes with Part 5). In looking at the proxy $\widehat{\alpha}$'s, the mean $\widehat{\alpha} = 3.14 \; (95\% \; CI: 2.97, 3.34)$. The proxy-based confidence interval estimates captured the population $\alpha$ (2.75) for 91 out of 100 samples; these confidence intervals are broad, though. For 87 samples, the proxy-based estimate was closer to the population $\alpha$ than estimating $\alpha$ from the sample itself. Hence, our proxy-based estimation does a little better than doing nothing at all (i.e., just relying on the sample), but still shows bias.
+
+I randomly grabbed 1,000 subsamples (from 10,000) and ran the bootstrap test for power law goodness-of-fit. Only 15 subsamples evidence a departure from a discrete power law distribution.
+
+```{r 71, include=FALSE, message=FALSE}
+temp71 <- temp69_alpha %>% group_by(sample) %>% 
+  summarize(proxy_ahat = mean(alpha),
+            lower = quantile(alpha, p = 0.025),
+            upper = quantile(alpha, p = 0.975)) %>% 
+  mutate(cover = ifelse(lower <= 2.748148 & upper >= 2.748148, 1, 0))
+temp71 <- temp55_samp_holder %>% left_join(temp71) %>% 
+  mutate(proxy_better = ifelse(proxy_ahat <= alpha, 1, 0))
+
+temp71 %>% summarize(coverage = mean(cover),
+                     betterment = mean(proxy_better)) ## 0.91, 0.87
+
+mean(temp71$alpha) ## 3.24
+quantile(temp71$alpha, p = c(0.025, 0.975)) ## (3.07, 3.45)
+mean(temp71$proxy_ahat) ## 3.14
+quantile(temp71$proxy_ahat, p = c(0.025, 0.975)) ## (2.97, 3.34)
+```
+
+**In summary, sampling of network component sizes via an intermediate step of sampling of nodes with reconstitution of components imposes a bias with respect to estimation of the shape parameter of a discrete power law distribution that cannot be reconciled through bootstrapping nor transformation. Perhaps we should consider a restricted adaptive sampling of components instead?**  
+
+## Part 10: Second (and Failed) Method Using Transformation to Proxy Population
+
+The reason why the transformation in Part 9 did not adequately address the estimation problem is because even though the component sizes are correctly "spread out" to reflect the domain for population, the probabilities do not change. In order for the estimate of $\alpha$ to be correctly driven down, we need small component sizes for our proxy population to have *smaller* probability mass and larger component sizes to have *greater* probability mass. (As far as I can see it, the only way to do this *directly* in a discrete case would be to have a transformation that is not one-to-one. However, in Part 11, we will begin to develop another method.)
+
+To drive home this point, consider the two plots below. These plots shows the probability mass function for two discrete power law models; $DPL(2.75)$ (like our population) and $DPL(3.23)$ (like a typical sample taken at $f = 0.40$).
+
+In the first plot, I show only component sizes $s = 1, 2, 3, 4$. We can see that $P[S = 1] = 0.860$ for the sample and $P[S = 1] = 0.793$ for the population. In other words, we need to "trim on $y$" to have a sample that is reflective of the population.
+
+In the second plot, I show both component sizes and probability on the log base 10 scale. This better helps us understand behavior out in the right tail. The population extends out to 23 (as we know), but the sample extends out to roughly 16. In other words, we need to "boost on $x$" to have a sample that is reflective of the population.
+
+```{r 72a, echo = FALSE, fig.align = 'center', message = FALSE, warning = FALSE}
+xmin <- 1; alpha_pop <- 2.748148; alpha_samp <- 3.225
+x <- xmin:23
+
+temp72a <- tibble(pred_rel_freq_pop = dpldis(x, xmin, alpha_pop),
+                  pred_rel_freq_samp = dpldis(x, xmin, alpha_samp))
+
+cols <- c("Num1" = "red", "Num2" = "black")
+linetype <- c("Num1" = "solid", "Num2" = "dotted")
+linewidth <- c("Num1" = 0.5, "Num2" = 1)
+leg_labs <- c("Population Alpha = 2.75", "Sample Alpha = 3.23")
+temp72a %>%
+  ggplot(aes(x = x)) +
+  geom_line(aes(y = pred_rel_freq_pop, color = "Num1", linetype = "Num1", lwd = "Num1")) +
+  geom_line(aes(y = pred_rel_freq_samp, color = "Num2", linetype = "Num2", lwd = "Num2")) +
+  xlim(1, 4) +
+  scale_colour_manual(name = "", values = cols, labels = leg_labs) +
+  scale_linetype_manual(name = "", values = linetype, labels = leg_labs) +
+  scale_size_manual(name = "", values = linewidth, labels = leg_labs) +
+  labs(title = "Discrete Power Law Distribution of Component Sizes", 
+       subtitle = "Lines used to demonstrate effect", x = "Component Size", y = "Probability") +
+  theme_classic() +
+  theme(legend.position = c(.70, .70), legend.title=element_blank(), legend.key.width = unit(1.5, "cm")) + My_Theme
+
+temp72a %>%
+  ggplot(aes(x = x)) +
+  geom_line(aes(y = pred_rel_freq_pop, color = "Num1", linetype = "Num1", lwd = "Num1")) +
+  geom_line(aes(y = pred_rel_freq_samp, color = "Num2", linetype = "Num2", lwd = "Num2")) +
+  scale_x_log10() +
+  scale_y_log10(limits = c(0.00012, NA)) +
+  scale_colour_manual(name = "", values = cols, labels = leg_labs) +
+  scale_linetype_manual(name = "", values = linetype, labels = leg_labs) +
+  scale_size_manual(name = "", values = linewidth, labels = leg_labs) +
+  labs(title = "Discrete Power Law Distribution of Component Sizes", 
+       subtitle = "Lines used to demonstrate effect", x = "Log_10 Component Size", y = "Log _10 Probability") +
+  theme_classic() +
+  theme(legend.position = c(.70, .75), legend.title=element_blank(), legend.key.width = unit(1.5, "cm")) + My_Theme
+```
+
+Another approach we can try is to simply adopt the rank-frequency plot approach in Part 1. Could this possibly make any difference or be of any use? What would happen if we were to apply this method to each of the proxy populations generated from the subsamples and estimate $\alpha$ using the log-log model of Gabaix and Ibragimov? Now the choice of how to handle tied ranks becomes much more serious. We have four options: ignore ties, or replace them with either their mean, minimum value, or maximim value. For example, consider the first subsample from the first sample ($f = 0.80$). The plot below shows the resulting proxy population and the four different model fits. Notice the very different estimates of $\alpha$. The 'ignore' and 'max' cases might be attributed to sampling variation (after all, the maximum population network component size of 23 was estimated to be 29 here), the 'average' case is likely too small, and the 'min' case stinks.    
+
+```{r 72b, echo = FALSE, fig.align = 'center', message = FALSE}
+lets_go <- temp63_example_c
+
+# ## Worst case; t = 9/20 = only 0.45 => max(proxy_pop) = 44 and alpha = 1.62 :(
+# ## Slope from model was -0.6180806
+# temp73_example <- temp63 %>% filter(sample == 2, subsample == 100)
+# lets_go <- temp73_example %>% group_by(proxy_pop) %>% count() 
+# ## Best case; t = 17/18 = 0.94 => max(proxy_pop) = 19 and alpha = 2.94 :)
+# ## Slope from model was -0.340229
+# temp73_example <- temp63 %>% filter(sample == 96, subsample == 19)
+# lets_go <- temp73_example %>% group_by(proxy_pop) %>% count() 
+
+lets_go_pp <- tibble(size = rep(lets_go$proxy_pop, lets_go$n)) %>% 
+  arrange(desc(size)) %>% mutate(total = sum(size))
+
+pp_size_by_rank <- lets_go_pp %>%
+  mutate(rank_row = row_number(),
+         rank_avg = rank(-size, ties.method = "average"), 
+         rank_max = rank(-size, ties.method = "max"),
+         rank_min = rank(-size, ties.method = "min"))
+
+mod1 <- lm(log10(size) ~ log10(rank_row - 0.5), data = pp_size_by_rank)         
+mod2 <- lm(log10(size) ~ log10(rank_avg - 0.5), data = pp_size_by_rank)
+mod3 <- lm(log10(size) ~ log10(rank_min - 0.5), data = pp_size_by_rank)
+mod4 <- lm(log10(size) ~ log10(rank_max - 0.5), data = pp_size_by_rank)
+# plot(log10(pp_size_by_rank$size) ~ log10(pp_size_by_rank$rank_row - 0.5))
+# abline(mod1)
+
+cols <- c("Num1" = "green", "Num2" = "red", "Num3" = "violet", "Num4" = "black")
+linetype <- c("Num1" = "dotted", "Num2" = "solid", "Num3" = "dashed", "Num4" = "dotdash")
+linewidth <- c("Num1" = 1, "Num2" = 0.5, "Num3" = 0.5, "Num4" = 0.5)
+labels_pt1 <- c("Ignore, ", "Avg, ", "Min, ", "Max, ")
+labels_pt2 <- round(c(-1/coef(mod1)[2], -1/coef(mod2)[2], -1/coef(mod3)[2], -1/coef(mod4)[2]), 2)
+leg_labs <- paste(labels_pt1, labels_pt2)
+
+pp_size_by_rank %>%
+  ggplot(aes(rank_row, size)) + geom_point(color = "red") +
+  geom_abline(aes(intercept = coef(mod1)[1], slope = coef(mod1)[2],
+              color = "Num1", linetype = "Num1", lwd = "Num1")) +
+  geom_abline(aes(intercept = coef(mod2)[1], slope = coef(mod2)[2],
+              color = "Num2", linetype = "Num2", lwd = "Num2")) +
+  geom_abline(aes(intercept = coef(mod3)[1], slope = coef(mod3)[2],
+              color = "Num3", linetype = "Num3", lwd = "Num3")) +
+  geom_abline(aes(intercept = coef(mod4)[1], slope = coef(mod4)[2],
+              color = "Num4", linetype = "Num4", lwd = "Num4")) +
+  geom_line(size = 1.1, alpha = 0.8) +
+  scale_x_log10() +
+  scale_y_log10() +
+  scale_colour_manual(name = "Ties, Alpha", values = cols, labels = leg_labs) +
+  scale_linetype_manual(name = "Ties, Alpha", values = linetype, labels = leg_labs) +
+  scale_size_manual(name = "Ties, Alpha", values = linewidth, labels = leg_labs) +
+  labs(title = "Plot of Component Sizes for Proxy Population 
+on Ranked Component Size", 
+subtitle = "Log_10 Scale for Both Axes", x = "Row Number", y = "Component Size",
+caption = "Ignore: ignore ties; Avg: replace with mean; 
+Min: replace with minimum; Max: replace with maximum") + 
+  theme(legend.position = c(.80, .70), legend.key.width = unit(2, "cm")) + My_Theme
+```
+
+In case you are interested, here is a snippet of the first 10 rows used to make the plot:
+
+```{r 73a, echo=FALSE, cache=TRUE, message=FALSE}
+## temp63 (f = 0.80), temp66 (f = 0.60), temp69 (f = 0.40) 
+temp73_rank <- temp63 %>% group_by(sample, subsample) %>% 
+  mutate(rank_row = row_number(),
+         rank_avg = rank(-proxy_pop, ties.method = "average"), 
+         rank_max = rank(-proxy_pop, ties.method = "max"),
+         rank_min = rank(-proxy_pop, ties.method = "min"))
+print(data.frame(head(temp73_rank, n = 10)))
+```
+
+And here are estimates of $\alpha$ from the first 6 subsamples from the first sample ($f = 0.80$) using all four types of ranking methods. Once again, the first row corresponds to the last plot:  
+
+```{r 73b, echo=FALSE, cache=TRUE, message=FALSE}
+temp73_alpha <- temp73_rank %>% group_by(sample, subsample) %>% 
+  summarize(alpha_ignore = -1/coef(lm(log10(proxy_pop) ~ log10(rank_row - 0.5)))[2],
+            alpha_avg = -1/coef(lm(log10(proxy_pop) ~ log10(rank_avg - 0.5)))[2],
+            alpha_max = -1/coef(lm(log10(proxy_pop) ~ log10(rank_max - 0.5)))[2],
+            alpha_min = -1/coef(lm(log10(proxy_pop) ~ log10(rank_min - 0.5)))[2])
+print(data.frame(head(temp73_alpha)))
+```
+
+The plot below is simply a reiteration of what we know from Part 7 above. This is a histogram of all 10,000 $t$, where $t = S_{ss}/S_s$. I include this here not to rehash Part 7, but to now additionally show the left-skew and large variability in tail trimming. The mean is approximately 0.816, while tail trimming moving from the population to the samples is 0.832, on average (again, we know this from Part 7). 
+
+```{r 73c, echo=FALSE, fig.align='center', message=FALSE}
+## w = 1 - [log(t^2)/log(S_{ss})],
+## where t = S_{ss}/S_s
+temp73_eda <- temp73_rank %>% group_by(sample, subsample) %>% 
+  summarize(t = first(t), w = first(w))
+hist(temp73_eda$t, xlab = "Proportion Tail Remaining", main = "") ## notice left-skew
+# mean(temp73_eda$t) ## Not bad (0.8162715, or 1 - 0.184 from Part 7)
+# 19.14/23 ## Close to 0.8321739
+```
+
+The plot below examines the relationship between tail trimming $t$ and $\widehat{\alpha}$ for each of the four tied ranks methods for the 10,000 subsamples. We add a horizontal red line for the population $\alpha$ of 2.75 and a vertical green line for the average tail trimming moving from the population to the samples (0.832) as visual references. It is clear that, except for some 'Ignore' cases, we have dramatically undershot the mark. Results from $f = 0.60$ and $0.40$ (not shown) looked even worse. 
+
+```{r 73d, echo=FALSE, fig.align='center', message=FALSE}
+# hist(temp73_eda$w) ## Therefore, we have right-skew 
+# plot(temp73_eda$t, temp73_eda$w)
+# quantile(temp73_eda$t)
+
+oldpar <- par(mfrow = c(2, 2))
+
+plot(temp73_eda$t, temp73_alpha$alpha_ignore, ylim = c(0.95, 2.95),
+     xlab = "Proportion Tail Remaining", ylab = "Estimated Alpha",
+     main = "Ignore")
+abline(h = 2.75, col = "red")
+abline(v = 0.8321739, col = "green")
+
+plot(temp73_eda$t, temp73_alpha$alpha_avg, ylim = c(0.95, 2.95),
+     xlab = "Proportion Tail Remaining", ylab = "Estimated Alpha",
+     main = "Avg")
+abline(h = 2.75, col = "red")
+abline(v = 0.8321739, col = "green")
+
+plot(temp73_eda$t, temp73_alpha$alpha_max, ylim = c(0.95, 2.95), 
+     xlab = "Proportion Tail Remaining", ylab = "Estimated Alpha",
+     main = "Max")
+abline(h = 2.75, col = "red")
+abline(v = 0.8321739, col = "green")
+
+plot(temp73_eda$t, temp73_alpha$alpha_min, ylim = c(0.95, 2.95),
+     xlab = "Proportion Tail Remaining", ylab = "Estimated Alpha",
+     main = "Min")
+abline(h = 2.75, col = "red")
+abline(v = 0.8321739, col = "green")
+
+par(oldpar)
+```
+
+**There are two take-home messages here. First, the rank-frequency approach will not at all solve the problem with bias. Second, the choice of how to handle tied ranks makes a big difference, an issue that I have not seen addressed in the literature in the context of this problem.** 
+
+## Part 11: What About the $y$-Axis?
+
+Let us take a deeper look at $P[S = s]$ as we move from population to sample to subsample. We will begin with a sampling fraction of $f = 0.80$. From Part One, we can determine that $P[S = 1] \approx 0.7940$ for the population. Let's compute $\Delta P_{p \rightarrow s} = P[S = 1]_{p}/P[S = 1]_{s}$ for each of the 100 samples. Below is the frequency histogram of the 100 $\Delta P_{p \rightarrow s}$ with a mean of 0.9782.  
+
+```{r 74a, echo=FALSE, fig.align='center', message=FALSE}
+## f = 0.80
+temp74 <- temp45_samp %>% group_by(sample) %>% mutate(rel_freq = freq/sum(freq))
+temp74_size1 <- temp74 %>% filter(size == 1) %>% mutate(drop = 0.793975904/rel_freq)
+# mean(temp74_size1$drop)
+hist(temp74_size1$drop, xlab = "Delta P_{p -> s}", main = "f = 0.80", xlim = c(0.88, 1.00))
+```
+
+Keeping our fingers crossed, we now turn our attention toward $\Delta P_{s \rightarrow ss} = P[S = 1]_{s}/P[S = 1]_{ss}$. On average, will this be the same as $\Delta P_{p \rightarrow s}$? Accordingly, for each sample, we compute $\Delta P_{s \rightarrow ss}$ for the 100 subsamples and take the mean. Repeat this process for all 100 samples. Below is the frequency histogram of the 100 (mean) $\Delta P_{s \rightarrow ss}$ with a (grand) mean of 0.9797. Ok, this is really encouraging.  
+
+```{r 74b, echo=FALSE, fig.align='center', message=FALSE}
+temp74_ss <- temp45 %>% group_by(sample, subsample) %>% mutate(rel_freq = freq/sum(freq))
+temp74_ss_size1 <- temp74_ss %>% filter(size == 1)
+temp74_all <- full_join(temp74_size1, temp74_ss_size1, by = "sample") %>%
+  mutate(ss_drop = rel_freq.x/rel_freq.y)
+temp74_all_means <- temp74_all %>% group_by(sample) %>% summarize(drop_means = mean(ss_drop))
+# mean(temp74_all_means$drop_means) # mean(temp74_all$ss_drop) ## same result; sanity check
+hist(temp74_all_means$drop_means, xlab = "Delta P_{s -> ss}", main = "f = 0.80", xlim = c(0.88, 1.00))
+```
+
+When we examine the case where the sampling fraction $f = 0.60$, we estimate the average $\Delta P_{p \rightarrow s}$ to be 0.9539, while for $\Delta P_{s \rightarrow ss}$ we obtain 0.9589. Again, really encouraging.
+
+```{r 75a, echo=FALSE, fig.align='center', message=FALSE}
+## f = 0.60
+temp75 <- temp50_samp %>% group_by(sample) %>% mutate(rel_freq = freq/sum(freq))
+temp75_size1 <- temp75 %>% filter(size == 1) %>% mutate(drop = 0.793975904/rel_freq)
+# mean(temp75_size1$drop) 
+hist(temp75_size1$drop, xlab = "Delta P_{p -> s}", main = "f = 0.60", xlim = c(0.88, 1.00))
+```
+
+```{r 75b, echo=FALSE, fig.align='center', message=FALSE}
+temp75_ss <- temp50 %>% group_by(sample, subsample) %>% mutate(rel_freq = freq/sum(freq))
+temp75_ss_size1 <- temp75_ss %>% filter(size == 1)
+temp75_all <- full_join(temp75_size1, temp75_ss_size1, by = "sample") %>%
+  mutate(ss_drop = rel_freq.x/rel_freq.y)
+temp75_all_means <- temp75_all %>% group_by(sample) %>% summarize(drop_means = mean(ss_drop))
+# mean(temp75_all_means$drop_means) # mean(temp75_all$ss_drop) ## same result; sanity check
+hist(temp75_all_means$drop_means, xlab = "Delta P_{s -> ss}", main = "f = 0.60", xlim = c(0.88, 1.00))
+```  
+
+For the case where the sampling fraction $f = 0.40$, we estimate the average $\Delta P_{p \rightarrow s}$ to be 0.9207, while for $\Delta P_{s \rightarrow ss}$ we obtain 0.9409. This is not as encouraging as the other two cases, but is it "close enough"? Stay tuned.
+
+You will also notice that I have deliberately set the $x$-axis limits to be the same on all these graphs ([0.88, 1.00]). This better shows the increasing variability in the distributions as $f$ decreases. In fact, for $f = 0.40$, we see the appearance of moderate skewness. This suggests that we might be approaching a limit, at least for component size $S$, for how small a sample we can take from the population network before there is too much instability, or sample-to-sample variability, which then percolates into the respective subsamples. This is likely also affected by the population composition (e.g., hub-and-spokes, chains, etc.).    
+
+```{r 76a, echo=FALSE, fig.align='center', message=FALSE}
+## f = 0.40
+temp76 <- temp54_samp %>% group_by(sample) %>% mutate(rel_freq = freq/sum(freq))
+temp76_size1 <- temp76 %>% filter(size == 1) %>% mutate(drop = 0.793975904/rel_freq)
+# mean(temp76_size1$drop); median(temp76_size1$drop) 
+hist(temp76_size1$drop, xlab = "Delta P_{p -> s}", main = "f = 0.40", xlim = c(0.88, 1.00))
+```
+
+```{r 76b, echo=FALSE, fig.align='center', message=FALSE}
+temp76_ss <- temp54 %>% group_by(sample, subsample) %>% mutate(rel_freq = freq/sum(freq))
+temp76_ss_size1 <- temp76_ss %>% filter(size == 1)
+temp76_all <- full_join(temp76_size1, temp76_ss_size1, by = "sample") %>%
+  mutate(ss_drop = rel_freq.x/rel_freq.y)
+temp76_all_means <- temp76_all %>% group_by(sample) %>% summarize(drop_means = mean(ss_drop))
+# mean(temp76_all_means$drop_means) # mean(temp76_all$ss_drop) ## same result; sanity check
+hist(temp76_all_means$drop_means, xlab = "Delta P_{s -> ss}", main = "f = 0.40", xlim = c(0.88, 1.00))
+```
+
+## New Stuff
+
+```{r 74c, eval=FALSE, include=FALSE}
+##### 2022/03/18: proportion of isolates (f = 0.80)
+temp74c <- temp45_samp %>% group_by(sample) %>% mutate(rel_freq = freq/sum(size*freq))
+temp74c_size1 <- temp74c %>% filter(size == 1) %>% mutate(drop = (659/1258)/rel_freq)
+# mean(temp74c_size1$drop) ## 0.92791
+hist(temp74c_size1$drop, xlab = "Delta P_{p -> s}", main = "f = 0.80", xlim = c(0.65, 1.00))
+
+temp74c_ss <- temp45 %>% group_by(sample, subsample) %>% mutate(rel_freq = freq/sum(size*freq))
+temp74c_ss_size1 <- temp74c_ss %>% filter(size == 1)
+temp74c_all <- full_join(temp74c_size1, temp74c_ss_size1, by = "sample") %>%
+  mutate(ss_drop = rel_freq.x/rel_freq.y)
+temp74c_all_means <- temp74c_all %>% group_by(sample) %>% summarize(drop_means = mean(ss_drop))
+# mean(temp74c_all_means$drop_means) # mean(temp74c_all$ss_drop) ## 0.933682; not as good as C
+hist(temp74c_all_means$drop_means, xlab = "Delta P_{s -> ss}", main = "f = 0.80", xlim = c(0.65, 1.00))
+
+##### Classic (absolute) bias-correction approach with bootstrapping
+
+temp74c_bs <- temp74c_all %>% select(sample, subsample, Ps = rel_freq.x, Pss = rel_freq.y)
+
+## Test case
+# temp74c_bs_trial <- temp74c_bs %>% filter(sample == 1)
+# hist(temp74c_bs_trial$Pss); mean(temp74c_bs_trial$Pss); median(temp74c_bs_trial$Pss)
+# shapiro.test(temp74c_bs_trial$Pss) ## pass
+
+temp74c_bs <- temp74c_bs %>% group_by(sample) %>% 
+  summarize(Ps = first(Ps),
+    mean_singleton = mean(Pss))
+
+temp74c_bs <- temp74c_bs %>%  mutate(BC_est = Ps - (mean_singleton - Ps))
+hist(temp74c_bs$BC_est); mean(temp74c_bs$BC_est) ## 0.5244123; bingo
+```
+
+```{r 75c, eval=FALSE, include=FALSE}
+##### 2022/03/18: proportion of isolates (f = 0.60)
+temp75c <- temp50_samp %>% group_by(sample) %>% mutate(rel_freq = freq/sum(size*freq))
+temp75c_size1 <- temp75c %>% filter(size == 1) %>% mutate(drop = (659/1258)/rel_freq)
+# mean(temp75c_size1$drop) ## 0.8494309
+hist(temp75c_size1$drop, xlab = "Delta P_{p -> s}", main = "f = 0.60", xlim = c(0.65, 1.00))
+
+temp75c_ss <- temp50 %>% group_by(sample, subsample) %>% mutate(rel_freq = freq/sum(size*freq))
+temp75c_ss_size1 <- temp75c_ss %>% filter(size == 1)
+temp75c_all <- full_join(temp75c_size1, temp75c_ss_size1, by = "sample") %>%
+  mutate(ss_drop = rel_freq.x/rel_freq.y)
+temp75c_all_means <- temp75c_all %>% group_by(sample) %>% summarize(drop_means = mean(ss_drop))
+# mean(temp75c_all_means$drop_means) # mean(temp75c_all$ss_drop) ## 0.8761156; not as good as C
+hist(temp75c_all_means$drop_means, xlab = "Delta P_{s -> ss}", main = "f = 0.60", xlim = c(0.65, 1.00))
+
+##### Classic (absolute) bias-correction approach with bootstrapping
+
+temp75c_bs <- temp75c_all %>% select(sample, subsample, Ps = rel_freq.x, Pss = rel_freq.y)
+
+## Test case
+# temp75c_bs_trial <- temp75c_bs %>% filter(sample == 1)
+# hist(temp75c_bs_trial$Pss); mean(temp75c_bs_trial$Pss); median(temp75c_bs_trial$Pss)
+# shapiro.test(temp75c_bs_trial$Pss) ## pass
+
+temp75c_bs <- temp75c_bs %>% group_by(sample) %>% 
+  summarize(Ps = first(Ps),
+    mean_singleton = mean(Pss))
+
+temp75c_bs <- temp75c_bs %>%  mutate(BC_est = Ps - (mean_singleton - Ps))
+hist(temp75c_bs$BC_est); mean(temp75c_bs$BC_est) ## 0.5293956; bingo
+```
+
+```{r 76c, eval=FALSE, include=FALSE}
+##### 2022/03/18: proportion of isolates (f = 0.40)
+temp76c <- temp54_samp %>% group_by(sample) %>% mutate(rel_freq = freq/sum(size*freq))
+temp76c_size1 <- temp76c %>% filter(size == 1) %>% mutate(drop = (659/1258)/rel_freq)
+# mean(temp76c_size1$drop) ## 0.7629237
+hist(temp76c_size1$drop, xlab = "Delta P_{p -> s}", main = "f = 0.40", xlim = c(0.65, 1.00))
+
+temp76c_ss <- temp54 %>% group_by(sample, subsample) %>% mutate(rel_freq = freq/sum(size*freq))
+temp76c_ss_size1 <- temp76c_ss %>% filter(size == 1)
+temp76c_all <- full_join(temp76c_size1, temp76c_ss_size1, by = "sample") %>%
+  mutate(ss_drop = rel_freq.x/rel_freq.y)
+temp76c_all_means <- temp76c_all %>% group_by(sample) %>% summarize(drop_means = mean(ss_drop))
+# mean(temp76c_all_means$drop_means) # mean(temp76c_all$ss_drop) ## 0.8373797; not as good as C
+hist(temp76c_all_means$drop_means, xlab = "Delta P_{s -> ss}", main = "f = 0.40", xlim = c(0.65, 1.00))
+
+##### Classic (absolute) bias-correction approach with bootstrapping
+
+temp76c_bs <- temp76c_all %>% select(sample, subsample, Ps = rel_freq.x, Pss = rel_freq.y)
+
+## Test case
+# temp76c_bs_trial <- temp76c_bs %>% filter(sample == 1)
+# hist(temp76c_bs_trial$Pss); mean(temp76c_bs_trial$Pss); median(temp76c_bs_trial$Pss)
+# shapiro.test(temp76c_bs_trial$Pss) ## pass
+
+temp76c_bs <- temp76c_bs %>% group_by(sample) %>% 
+  summarize(Ps = first(Ps),
+    mean_singleton = mean(Pss))
+
+temp76c_bs <- temp76c_bs %>%  mutate(BC_est = Ps - (mean_singleton - Ps))
+hist(temp76c_bs$BC_est); mean(temp76c_bs$BC_est) ## 0.5528634; not as good, but still useful
+```
+
+```{r 81, eval=FALSE, include=FALSE}
+##### 2022/03/18: 
+## CIs for proportion of isolates (f = 0.80)
+
+temp81_a <- temp74c_all %>% select(sample, subsample, 
+                                   Ps = rel_freq.x, Pss = rel_freq.y)
+
+temp81_b <- temp81_a %>% group_by(sample) %>% 
+  summarize(Ps = first(Ps), mean_singleton = mean(Pss), SE = sd(Pss))
+
+temp81_c <- temp81_b %>% 
+  mutate(BC_est = Ps - (mean_singleton - Ps), 
+         LCL = BC_est + qt(0.025, 1005)*SE, UCL = BC_est + qt(0.975, 1005)*SE, 
+         prob1_cover = ifelse(LCL <= 659/1258 & UCL >= 659/1258, 1, 0))
+            
+## When looking at CI coverage, B = only 100
+## Reference: mean(temp81_c$Ps) 0.5647217 
+hist(temp81_c$BC_est); mean(temp81_c$BC_est) ## 0.5244123 
+mean(temp81_c$prob1_cover) ## 0.95
+## Terrific; results do not get better than this
+
+## CIs for proportion of isolates (f = 0.60)
+
+temp81_d <- temp75c_all %>% select(sample, subsample, 
+                                   Ps = rel_freq.x, Pss = rel_freq.y)
+
+temp81_e <- temp81_d %>% group_by(sample) %>% 
+  summarize(Ps = first(Ps), mean_singleton = mean(Pss), SE = sd(Pss))
+
+temp81_f <- temp81_e %>% 
+  mutate(BC_est = Ps - (mean_singleton - Ps), 
+         LCL = BC_est + qt(0.025, 754)*SE, UCL = BC_est + qt(0.975, 754)*SE, 
+         prob1_cover = ifelse(LCL <= 659/1258 & UCL >= 659/1258, 1, 0))
+            
+## When looking at CI coverage, B = only 100
+## Reference: mean(temp81_f$Ps) 0.6171656 
+hist(temp81_f$BC_est); mean(temp81_f$BC_est) ## 0.5293956 
+mean(temp81_f$prob1_cover) ## 0.90
+## Results are very good
+
+## CIs for proportion of isolates (f = 0.40)
+
+temp81_g <- temp76c_all %>% select(sample, subsample, 
+                                   Ps = rel_freq.x, Pss = rel_freq.y)
+
+temp81_h <- temp81_g %>% group_by(sample) %>% 
+  summarize(Ps = first(Ps), mean_singleton = mean(Pss), SE = sd(Pss))
+
+temp81_i <- temp81_h %>% 
+  mutate(BC_est = Ps - (mean_singleton - Ps), 
+         LCL = BC_est + qt(0.025, 502)*SE, UCL = BC_est + qt(0.975, 502)*SE, 
+         prob1_cover = ifelse(LCL <= 659/1258 & UCL >= 659/1258, 1, 0))
+            
+## When looking at CI coverage, B = only 100
+## Reference: mean(temp81_i$Ps) 0.6874155 
+hist(temp81_i$BC_est); mean(temp81_i$BC_est) ## 0.5528634 
+mean(temp81_i$prob1_cover) ## 0.84
+## Results are still good, or useful
+```
+
+## References 
